@@ -14,7 +14,9 @@ from routed_flow import route_result, trace
 from openxc7_tree import RouteTree
 from unittest.mock import Mock, patch
 from init_bits import configured
-from pin_activity import transitions
+from packed_buffers import append_buffers, input_sources
+from pack import asset
+from pin_activity import native_pins, read_asset, replay_pins, transitions
 from scopes import links
 import vivado_lane
 
@@ -50,6 +52,125 @@ class WorkloadTest(unittest.TestCase):
             samples = Path(tmp) / "pins.txt"
             samples.write_text("00\n01\nx1\n10\nz0\n")
             self.assertEqual(transitions(samples, 2, 5), bytes([0, 1, 0, 1, 0]))
+
+    def test_packed_identity_replay(self) -> None:
+        """A shared physical input cannot replace I0. Chained buffers copy one exact carry bit."""
+        cells = {
+            "carry": packed("CARRY4", {}, {"O2": 2}),
+            "zero": packed("PSEUDO_GND", {}, {"Y": 1}),
+            "buf": packed("SLICE_LUTX", {"A2": 2, "A4": 1}, {"O5": 3}),
+            "next": packed("SLICE_LUTX", {"A2": 3}, {"O5": 4}),
+            "ground": packed("SLICE_LUTX", {"A2": 1}, {"O5": 5}),
+        }
+        cells["carry"]["attributes"] = {
+            "X_ORIG_TYPE": "CARRY4",
+            "X_ORIG_PORT_O2": "O[2]",
+        }
+        for name in ("buf", "next", "ground"):
+            cells[name].update(
+                parameters={"INIT": "0010"},
+                attributes={
+                    "X_ORIG_TYPE": "LUT1",
+                    "X_ORIG_PORT_O5": "O",
+                    "X_ORIG_PORT_A2": "I0",
+                    "NEXTPNR_BEL": "SLICE_X1Y2/C5LUT",
+                },
+            )
+        self.assertEqual(
+            input_sources(cells, ["carry"]),
+            {
+                "buf": (0, "O2"),
+                "next": (0, "O2"),
+                "ground": None,
+            },
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            g = Path(tmp)
+            b = dict(
+                cells=1,
+                mapped=1,
+                kinds=["CARRY4"],
+                placementOnly={"LUT1": 3},
+                names=asset(g, "names", b"carry"),
+                catalogue=asset(g, "cat", struct.pack("<iBh", 2, 0, -1)),
+                chunks=[asset(g, "chunk", bytes([0, 1, 1, 0, 0, 1]))],
+                changed=[0, 1, 0],
+                unknown=[1, 0, 1],
+            )
+            replay = dict(cycles=3, chunk=3, backends={"openxc7": b})
+            trace = g / "pins.txt"
+            trace.write_text("0\n1\nx\n")
+            pins = native_pins(["carry"], cells)
+            keep, changes = replay_pins(g, replay, "openxc7", pins, trace, {(0, "O2")})
+            self.assertEqual(changes, bytes([0, 1, 0]))
+            grid = Mock(owners={"SLICE_X1Y2": 7})
+            self.assertEqual(
+                append_buffers(g, replay, cells, grid, keep),
+                ["carry", "buf", "next", "ground"],
+            )
+            self.assertEqual(read_asset(g, b["chunks"][0]), bytes([0, 15, 7, 0, 0, 7]))
+            self.assertEqual(read_asset(g, b["entire"]), bytes([7, 7]))
+        cells["buf"]["parameters"]["INIT"] = "01"
+        self.assertEqual(input_sources(cells, ["carry"]), {"ground": None})
+
+    def test_split_ram_and_srl_launches(self) -> None:
+        """Launch only from the connected SDF clock half and keep SRL data on the preceding edge."""
+        cells = {
+            "clk": packed("BUFGCTRL", {}, {"O": 1}),
+            "ram": packed(
+                "RAMB36E1_RAMB36E1", {"CLKARDCLKU": 1, "CLKARDCLKL": 2}, {"DOADO0": 3}
+            ),
+            "srl": packed("SLICE_LUTX", {"CLK": 1, "DI2": 3}, {"O6": 2}),
+        }
+        cells["srl"]["attributes"] = {"X_LUT_AS_SRL": "1", "X_ORIG_PORT_O6": "Q"}
+        with tempfile.TemporaryDirectory() as tmp:
+            sdf = Path(tmp) / "placed.sdf"
+            for connected in (False, True):
+                cells["ram"]["connections"]["CLKARDCLKL"] = [1 if connected else 2]
+                rows = [
+                    "(TIMESCALE 1ps)",
+                    '(CELLTYPE "top")',
+                    "(INSTANCE )",
+                    delay("INTERCONNECT", "clk/O", "ram/CLKARDCLKU", 400),
+                    delay(
+                        "INTERCONNECT",
+                        "clk/O" if connected else "srl/O6",
+                        "ram/CLKARDCLKL",
+                        110,
+                    ),
+                    delay("INTERCONNECT", "clk/O", "srl/CLK", 400),
+                    delay("INTERCONNECT", "ram/DOADO0", "srl/DI2", 175),
+                    '(CELLTYPE "BUFGCTRL")',
+                    "(INSTANCE clk)",
+                    '(CELLTYPE "RAMB36E1_RAMB36E1")',
+                    "(INSTANCE ram)",
+                    delay("IOPATH", "CLKARDCLKL", "DOADO0", 2080),
+                    '(CELLTYPE "SLICE_LUTX")',
+                    "(INSTANCE srl)",
+                    delay("IOPATH", "CLK", "O6", 1102),
+                    delay("IOPATH", "DI2", "O6", 124),
+                ]
+                if connected:
+                    # Keep the SRL output consumed while its RAM clock sink moves to BUFG.
+                    cells["ram"]["connections"]["ADDR0"] = [2]
+                    cells["ram"]["port_directions"]["ADDR0"] = "input"
+                    rows.insert(7, delay("INTERCONNECT", "srl/O6", "ram/ADDR0", 90))
+                sdf.write_text("\n".join(rows))
+                data, ports, pins, _ = placed_rows(
+                    dict(cells=cells, netnames={}), sdf, list(cells)
+                )
+                timed = {
+                    ports[i]: (start, end)
+                    for (i,), (_, _, start, end) in zip(
+                        struct.iter_unpack("<H", pins), ROW.iter_unpack(data)
+                    )
+                }
+                self.assertNotIn(("DI2", "O6"), timed)
+                self.assertAlmostEqual(timed["CLK", "O6"][1], 1.102, places=5)
+                if connected:
+                    self.assertAlmostEqual(timed["DOADO0", "DI2"][0], 2.080, places=5)
+                else:
+                    self.assertNotIn(("DOADO0", "DI2"), timed)
 
     def test_registered_state_lane(self) -> None:
         """Check reset priority, disabled captures and known adjacent pin changes across the register."""

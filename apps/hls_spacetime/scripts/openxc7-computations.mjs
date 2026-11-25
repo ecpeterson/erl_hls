@@ -157,6 +157,10 @@ export function openxc7Computations(
     const clockedBlock =
       (modelInfo.bram_model_sha256 &&
         /^(RAMB18E1_RAMB18E1|RAMB36E1_RAMB36E1)$/.test(kind)) ||
+      (modelInfo.fixed_srl_model_sha256 &&
+        kind === "SLICE_LUTX" &&
+        Object.hasOwn(cell.attributes, "X_LUT_AS_SRL") &&
+        raw.ports.O6?.class === "register_output") ||
       (modelInfo.registered_dsp_model_sha256 &&
         kind === "DSP48E1_DSP48E1" &&
         Object.values(raw.ports).some((p) => p.class === "register_output"));

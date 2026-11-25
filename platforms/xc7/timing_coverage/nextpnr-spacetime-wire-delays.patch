@@ -1,0 +1,19 @@
+--- a/xilinx/main.cc
++++ b/xilinx/main.cc
+@@ -97,6 +97,7 @@
+     specific.add_options()("chipdb", po::value<std::string>(), "name of chip database binary");
+     specific.add_options()("xdc", po::value<std::vector<std::string>>(), "XDC-style constraints file");
+     specific.add_options()("fasm", po::value<std::string>(), "fasm bitstream file to write");
++    specific.add_options()("spacetime-wire-delays", po::value<std::string>(), "write incremental wire and incoming PIP delays in ps");
+     specific.add_options()("spacetime-timing", po::value<std::string>(), "write post-route timing and preserve packing origins");
+     specific.add_options()("spacetime-route-request", po::value<std::string>(), "selected packed nets or aliases");
+     specific.add_options()("spacetime-sta", po::value<std::string>(), "write bounded native critical paths after routing");
+@@ -126,6 +127,8 @@
+         std::string filename = vm["fasm"].as<std::string>();
+         ctx->writeFasm(filename);
+     }
++    if (vm.count("spacetime-wire-delays"))
++        writeSpacetimeWireDelays(ctx, vm["spacetime-wire-delays"].as<std::string>());
+     if (vm.count("write-fixed-routes"))
+         ctx->writeFixedRoutes(vm["write-fixed-routes"].as<std::string>());
+ }

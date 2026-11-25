@@ -7,6 +7,27 @@ NEXTPNR_NAMESPACE_END
 namespace {
 using json11::Json;
 
+// Stream the incremental ps on each bound wire, including its incoming switch.
+// A sink-specific path can then be reconciled independently with the SDF.
+void writeSpacetimeWireDelays(Context *ctx, const std::string &filename)
+{
+    std::ofstream out(filename);
+    for (const auto &entry : ctx->nets) {
+        const auto *net = entry.second.get();
+        for (const auto &binding : net->wires) {
+            auto wire = binding.first;
+            auto pip = binding.second.pip;
+            auto delay = ctx->getWireDelay(wire).maxDelay();
+            if (pip != PipId())
+                delay += ctx->getPipDelay(pip).maxDelay();
+            out << "W\t" << net->name.str(ctx) << '\t' << ctx->getWireName(wire).str(ctx) << '\t' << delay << '\n';
+        }
+    }
+    out.close();
+    if (!out)
+        log_error("Cannot write complete Spacetime wire delays\n");
+}
+
 // Account for queries as well as serialized rows, including absent arcs.
 void chargeSpacetime(int &remaining)
 {

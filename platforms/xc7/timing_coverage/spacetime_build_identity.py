@@ -20,6 +20,10 @@ def write_identity(stage: Path) -> None:
     dsp = xilinx / "registered_dsp.inc"
     if dsp.exists():
         inputs.extend([dsp, here / "nextpnr-spacetime-registered-dsp.patch"])
+    if (xilinx / "fixed_srl.inc").exists():
+        inputs.extend([xilinx / "fixed_srl.inc", here / "nextpnr-spacetime-fixed-srl.patch"])
+    if "spacetime-wire-delays" in (xilinx / "main.cc").read_text():
+        inputs.append(here / "nextpnr-spacetime-wire-delays.patch")
     carry = stage / "nextpnr-spacetime-carry.patch"
     if carry.exists():
         inputs.append(carry)

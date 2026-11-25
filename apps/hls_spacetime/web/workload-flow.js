@@ -174,7 +174,10 @@ function showFlowCoverage(article, backend, timing, model, groups) {
         ? "One nextpnr delay estimate per timed connection. Independent fast and slow corners are unavailable."
         : "One placement-based delay estimate per timed connection. Routed switch geometry and independent timing corners are unavailable.",
     );
-    if (timing.unreachedConnections !== undefined)
+    if (timing.omittedLaunches) {
+      const { constant = 0, io = 0, other = 0 } = timing.omittedLaunches;
+      note(`Connections outside timed flow · ${format(constant)} driven by constants · ${format(io)} at the clock or package I/O boundary · ${format(other)} other unmodeled launches.`);
+    } else if (timing.unreachedConnections !== undefined)
       note(
         `${format(timing.unreachedConnections)} connections lack a modeled launch.`,
       );
@@ -200,18 +203,28 @@ function showFlowCoverage(article, backend, timing, model, groups) {
       ? `Activity is sampled on ${format(timing.outputActivity.count)} named output bits. Other rows use primitive-level changes.`
       : "Rows use whole-primitive changes. This capture has no per-output-bit activity masks.",
   );
-  if (groups?.length) {
+  if (timing.identityBuffers) {
+    note(`For ${format(timing.identityBuffers)} packer-inserted LUT buffers, the replay derives settled output activity from the connected input bit and the identity truth table.`);
+  }
+  const output = groups?.find(({ kind }) => kind === "OBUF");
+  if (output) {
+    note(`Package output buffers with a known change · ${format(output.count)} · ${output.example}`);
+  }
+  const internal = groups?.filter(({ kind }) => kind !== "OBUF");
+  if (internal?.length) {
     note(
       "Changed primitives with no outgoing timed connection in this capture, including unconsumed outputs. One instance per type is listed.",
     );
     const list = document.createElement("ul");
-    for (const { kind, count, example } of groups) {
+    for (const { kind, count, example } of internal) {
       const item = document.createElement("li");
       item.textContent = `${kind} × ${format(count)} · ${example}`;
       list.append(item);
     }
     details.append(list);
-  } else if (!groups) {
+  } else if (groups) {
+    note("Every changing internal primitive drives a timed connection.");
+  } else {
     note(
       "The capture lacks the data to compare timed drivers with whole-replay changes.",
     );
@@ -321,6 +334,9 @@ export async function createFlow(replay, catalogs, asset) {
         )
           throw Error("Incomplete native timing inventory");
         pinModel.registeredProducts = new Set(nativeTiming.registeredProducts);
+        if (nativeTiming.identityBuffers) {
+          pinModel.firstBuffer = catalogs[b].tile.length - nativeTiming.identityBuffers;
+        }
         if (routed) {
           if (
             classes.length !== pinModel.nets ||
@@ -961,7 +977,9 @@ export async function createFlow(replay, catalogs, asset) {
       (pair ? "/" + pair[1] : "") +
       (p.model.activity?.lanes[i] >= 0
         ? " · sampled output bit changed"
-        : " · primitive-level activity");
+        : (found.local ? d : a) >= p.model.firstBuffer
+          ? " · identity buffer copied its input bit"
+          : " · primitive-level activity");
     redraw();
   }
 

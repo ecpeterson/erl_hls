@@ -143,6 +143,23 @@ def logical(work: Path, out: Path, planes: str = "XZ") -> tuple[dict, list]:
     ), expected
 
 
+def observe_ids(names: list[str], cells: dict, ids: dict) -> dict:
+    """Join observed objects to packed names, including the uniquely split IO buffers."""
+    observed = {}
+    for i, name in enumerate(names):
+        if name not in cells:
+            matches = [
+                name + "$intcell$" + kind
+                for kind in ("IBUF", "OBUF")
+                if name + "$intcell$" + kind in cells
+            ]
+            require(len(matches) == 1, "absent packed primitive " + name)
+            name = matches[0]
+        require(ids[name] not in observed, "duplicate packed observer")
+        observed[ids[name]] = i
+    return observed
+
+
 def placement(run: Path, work: Path, backend: str) -> tuple[dict, dict, dict]:
     """Read physical cell identities and recover observable public capture register lanes."""
     if backend == "vivado":

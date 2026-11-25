@@ -13,34 +13,32 @@ from pathlib import Path
 
 from flow import ROW, arrivals, asset, digest, inventory, require
 from openxc7 import logic_arc
+from pack import observe_ids
+from packed_buffers import identity_input
 
 ESCAPE = re.compile(r"\\(.)")
 DELAY = re.compile(r"\(([\d.]+):([\d.]+):([\d.]+)\) \(([\d.]+):([\d.]+):([\d.]+)\)\)")
 
 
+def launch_pin(cell: dict, pin: str) -> bool:
+    """Identify a storage clock pin whose launch requires the observed global clock."""
+    if cell["type"].startswith("RAMB"):
+        return re.fullmatch(r"(CLKARDCLK|CLKBWRCLK)[LU]?", pin) is not None
+    if cell["type"] == "SLICE_FFX":
+        return pin == "CK"
+    return pin == "CLK" and (
+        "X_LUT_AS_SRL" in cell["attributes"] or cell["type"] == "DSP48E1_DSP48E1"
+    )
+
+
 def modeled_arc(cell: dict, src: str, dst: str) -> bool:
-    """Keep functional carry lanes and stop at unsupported LUT storage modes."""
+    """Keep functional carry lanes and only the reported shift-register clock-to-Q launch."""
     attrs = cell["attributes"]
-    if "X_LUT_AS_SRL" in attrs or "X_LUT_AS_DRAM" in attrs:
+    if "X_LUT_AS_SRL" in attrs:
+        return src == "CLK" and attrs.get("X_ORIG_PORT_" + dst) == "Q"
+    if "X_LUT_AS_DRAM" in attrs:
         return False
     return cell["type"] != "CARRY4" or logic_arc(cell, src, dst)
-
-
-def observe_ids(names: list[str], cells: dict, ids: dict) -> dict:
-    """Join observed objects to packed names, including the uniquely split IO buffers."""
-    observed = {}
-    for i, name in enumerate(names):
-        if name not in cells:
-            matches = [
-                name + "$intcell$" + kind
-                for kind in ("IBUF", "OBUF")
-                if name + "$intcell$" + kind in cells
-            ]
-            require(len(matches) == 1, "absent packed primitive " + name)
-            name = matches[0]
-        require(ids[name] not in observed, "duplicate packed observer")
-        observed[ids[name]] = i
-    return observed
 
 
 def placed_rows(
@@ -132,10 +130,12 @@ def placed_rows(
                     sinks.add(b)
                     if a == (clock, "O"):
                         stats["clockLoads"] += 1
-                        if b[1] in ("CK", "CLKARDCLK", "CLKBWRCLK"):
-                            seeds[b] = 0
-                        elif b[1] == "CLK" and objects[b[0]]["type"] == "DSP48E1_DSP48E1":
-                            dsp_clocks.add(b)
+                        target, pin = objects[b[0]], b[1]
+                        if launch_pin(target, pin):
+                            if target["type"] == "DSP48E1_DSP48E1":
+                                dsp_clocks.add(b)
+                            else:
+                                seeds[b] = 0
                     else:
                         nets.append((a, b, ps))
                 else:
@@ -145,6 +145,11 @@ def placed_rows(
                     if (
                         a in sinks
                         and b in sources
+                        and (
+                            not launch_pin(objects[cell], src)
+                            or a in seeds
+                            or a in dsp_clocks
+                        )
                         and modeled_arc(objects[cell], src, dst)
                     ):
                         arcs.append((a, b, ps))
@@ -152,7 +157,8 @@ def placed_rows(
                             seeds[a] = 0
                             params = objects[cell]["parameters"]
                             if cell in observed and all(
-                                int(params.get(p, "0"), 2) == 1 for p in ("MREG", "PREG")
+                                int(params.get(p, "0"), 2) == 1
+                                for p in ("MREG", "PREG")
                             ):
                                 registered_products.add(observed[cell])
     require(
@@ -180,10 +186,35 @@ def placed_rows(
         nonclockConnections=len(nets),
         usedCellArcs=len(arcs),
     )
+    omitted = Counter()
+    origins = {}
+
+    def launch_origin(pin: tuple) -> str:
+        """Classify a missing driver by its actual primitive, following packed identity LUT inputs."""
+        path = set()
+        while pin not in origins and pin not in path:
+            path.add(pin)
+            obj = objects[pin[0]]
+            kind = obj["attributes"].get("X_ORIG_TYPE", obj["type"])
+            if kind in ("PSEUDO_GND", "PSEUDO_VCC"):
+                origins[pin] = "constant"
+            elif kind in ("IBUF", "OBUF"):
+                origins[pin] = "io"
+            else:
+                upstream = drivers.get(identity_input(obj, pin[1]))
+                if upstream is None:
+                    break
+                pin = upstream
+        label = origins.get(pin, "other")
+        origins.update(dict.fromkeys(path, label))
+        return label
+
     for key, edges in (("Connections", nets), ("CellArcs", arcs)):
         for a, b, ps in edges:
             if a not in times:
                 stats["unreached" + key] += 1
+                if key == "Connections":
+                    omitted[launch_origin(a)] += 1
                 continue
             if a[0] not in observed or b[0] not in observed:
                 stats["unobserved" + key] += 1
@@ -201,6 +232,8 @@ def placed_rows(
             )
             stats["timed" + key] += 1
     coverage = dict(stats)
+    if omitted:
+        coverage["omittedLaunches"] = dict(omitted)
     if registered_products:
         coverage["registeredProducts"] = sorted(registered_products)
     return rows, list(ports), pin_ids, coverage

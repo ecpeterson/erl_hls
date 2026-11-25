@@ -308,3 +308,21 @@ test("the registered DSP model exposes a clocked P frontier", async (t) => {
     assert.equal(result.arcs.length, 0);
   }
 });
+
+test("only a modeled SRL output ends a clocked cone", async (t) => {
+  const { view } = await sourceFixture(t);
+  const type = "SLICE_LUTX";
+  const packed = { tap: { type, attributes: { X_LUT_AS_SRL: "1", X_ORIG_TYPE: "SRL16E" } } };
+  const clock = { port: "CLK", edge: "rising", clock_to_q_ps: 1102 };
+  for (const [model, portClass, expected] of [
+    [{ fixed_srl_model_sha256: "test" }, "register_output", "hard_block"],
+    [{ fixed_srl_model_sha256: "test" }, "comb_output", "unsupported"],
+    [{}, "register_output", "unsupported"],
+  ]) {
+    const ports = { O6: { net: "tap", direction: "OUT", class: portClass, clocks: [clock] } };
+    const timing = { cells: { tap: { type, ports, arcs: [] } }, sinks: [] };
+    const result = openxc7Computations(view, packed, timing, [], model);
+    assert.equal(result.cells[0].boundary, expected);
+    assert.equal(result.arcs.length, 0);
+  }
+});

@@ -258,8 +258,12 @@ def identities(
     """Record exact shared RTL, simulation tools, observer, native inputs, checkpoint and vendor reports."""
     build = json.loads(router.with_name("spacetime-build.json").read_text())["sha256"]
     require(digest(router) == build["nextpnr-spacetime"], "nextpnr build mismatch")
+    lut_patch = "nextpnr-xc7-lut-route-delay.patch"
     for model in (
-        "nextpnr-xc7-lut-route-delay.patch",
+        lut_patch,
+        "nextpnr-spacetime-fixed-srl.patch",
+        "nextpnr-spacetime-wire-delays.patch",
+        "fixed_srl.inc",
         "nextpnr-spacetime-registered-dsp.patch",
         "registered_dsp.inc",
     ):
@@ -281,7 +285,7 @@ def identities(
         "periodNs": 20,
         "seed": 1,
         "nativeStage": mode,
-        **({"routedLutTiming": True} if mode == "routed" and patch in build else {}),
+        **({"routedLutTiming": True} if mode == "routed" and lut_patch in build else {}),
         "pins": {"clock": "Y14", "activity": "V13"},
         "constraints": digest(XDC),
         "testbench": digest(HERE / "transaction_tb.sv"),

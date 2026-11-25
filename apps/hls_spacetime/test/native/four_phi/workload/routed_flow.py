@@ -8,11 +8,12 @@ import shutil
 import struct
 import tempfile
 from collections import Counter, defaultdict
+from collections.abc import Callable
 from pathlib import Path
 
 from flow import ROW, asset, digest, inventory, native, require
-from pack import ChipGrid, VENDOR
-from placed_flow import observe_ids, placed_rows
+from pack import ChipGrid, VENDOR, observe_ids
+from placed_flow import placed_rows
 from openxc7_endpoints import LutPermutations
 from openxc7_tree import NEXTPNR_COMMIT, RouteTree, WireNames
 
@@ -75,6 +76,7 @@ def geometry(
     n: int,
     path: dict,
     result: dict,
+    visit_branch: Callable[[int, str, list | None], None] | None = None,
 ) -> tuple:
     """Reconcile fixed PIPs on demanded nets, preserving row order and the independently selected path."""
     require(0 < n <= 500_000 and len(path["steps"]) <= 512, "branch count limit")
@@ -148,6 +150,8 @@ def geometry(
                     else [tree.parent[end][3] for end in steps],
                 )
                 continue
+            if visit_branch is not None:
+                visit_branch(i, net, steps)
             counts[status] += 1
             if steps is None:
                 classes[i], rows[i] = 2, b"\xff\xff"
