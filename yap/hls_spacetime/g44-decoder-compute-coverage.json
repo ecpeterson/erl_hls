@@ -1,0 +1,230 @@
+{
+  "archive": "runs/spacetime-g4-parity-2026-11-24/decoder-compute-coverage",
+  "inventorySha256": "b96c7a81670e3c5479e2c468c1320ff002f99d234b971c1fc5ca20dff87af3d0",
+  "evidenceTarSha256": "cf907f38dffcbfe4e23e11016ed39f0ed22b6994b2ae457dee4d6f06302b0d3a",
+  "scope": "4096 settled harness clocks, single XC7Z030-1 timing estimate, native routed two-worker and placed four-worker implementations; original Vivado geometry.",
+  "two": {
+    "clocks": 4096,
+    "manifest": "c40861d6293cad7fb5549514caf355625e272c78d2e846cb20b0ed74da4f0070",
+    "checkpoint": "acc4e94d967c7745174aca6113a633e9f5a1c732c3d27f27e5c68597c3f1ac07",
+    "nativeSdf": "d307044e9bfeafba7ce915145c9ed3c16d613032ce18495adccab5eb5fdef523",
+    "backends": {
+      "openxc7": {
+        "dataConnections": 113931,
+        "timedConnections": 105654,
+        "timedCellArcs": 88984,
+        "changingWithoutTimedOutput": {
+          "OBUF": 1
+        },
+        "monitoredPins": 4960,
+        "knownPinTransitions": 485974,
+        "matchedSrlSamples": 0,
+        "srlOutputChanges": {},
+        "publicClockCheck": {
+          "checkpoint": "acc4e94d967c7745174aca6113a633e9f5a1c732c3d27f27e5c68597c3f1ac07",
+          "functionalMonitor": "0cc56c2f59621bfe3e7efae01fca3ca1284c31d676990a57e619cdbac3b5e42a",
+          "netlist": "62e273f5bb35a4ba55aa2d7c4ac24c725fc0884c5d7e922acb596a498980393b",
+          "originalLog": "24106e90f1e2269506801e954a4409a81495a32438103df3b8ca7c99751122ff",
+          "pins": "408d5fe80ed293055a9dbc43cfacef54776813c76241e1f137a3639fa5c9fc26",
+          "publicClocks": 4096,
+          "samples": "d8d77a07ba7ec0ba1cc8a234f56f3f7c4ef5282fcb7e13a1e74e773d9e6061b4"
+        },
+        "identityBuffers": 1841,
+        "omitted": {
+          "io": 2,
+          "constant": 8275
+        },
+        "mailboxBits": 224,
+        "mailboxCells": 4,
+        "ramConnection": {
+          "cycle": 20,
+          "cell": "decoder.scheduler_1_mailbox.memory.0.0",
+          "port": "DOADO0",
+          "sink": "$flatten\\decoder.$auto$ff.cc:337:slice$38744",
+          "input": "D",
+          "endPs": 3307
+        },
+        "srlLaunchPs": {},
+        "geometry": {
+          "permuted": 49910,
+          "switchVisits": 1457652,
+          "zeroSwitch": 1150,
+          "routed": 55744
+        }
+      },
+      "vivado": {
+        "dataConnections": 108836,
+        "timedConnections": 108835,
+        "timedCellArcs": 92938,
+        "changingWithoutTimedOutput": {
+          "OBUF": 1
+        },
+        "monitoredPins": 2550,
+        "knownPinTransitions": 230671,
+        "matchedSrlSamples": 12288,
+        "srlOutputChanges": {
+          "flow_reg[20]_srl19": 2008,
+          "flow_reg[30]_srl9": 2011,
+          "reset_pipe_reg[2]_srl3": 1
+        },
+        "publicClockCheck": {
+          "checkpoint": "cf472bce3b89334701cf5fba28b144eb5e41d2ba000da8906d0715dc3410efdc",
+          "functionalMonitor": "7d5bdf6d64fe9c2ad2900d4c977d71e0894201f40fa0467541c285a5b7fefafc",
+          "netlist": "5df502a406b4510b7e6345aa07318f00899125765820173758d6550a0d577995",
+          "originalLog": "fcaa79fe9f016b44f2512b60293566510b9c539cf0789ec74eefa5a847d583af",
+          "pins": "48270b6196de4e12fc269da095f2e8a56cf552c967c55efefd985e65a7124d33",
+          "publicClocks": 4096,
+          "samples": "ef6e0a5b3bb040a56b2a809c473bf0c7659ab2e462bc3b4f6c1c743f2a65776b"
+        }
+      }
+    }
+  },
+  "four": {
+    "clocks": 4096,
+    "manifest": "8e0f0f4b84c4e59544261fdd4513b01cea27d2d2fbf0961c72a36790f210630c",
+    "checkpoint": "dd15b35c1d78603932db09dd40496ef915cdb2f946aad7c221f71b3eb9a6f2d9",
+    "nativeSdf": "438e0d091a791bacc8971ce789ecdca3077260bd8e4f6694810f8fa368b2636c",
+    "backends": {
+      "openxc7": {
+        "dataConnections": 259159,
+        "timedConnections": 241191,
+        "timedCellArcs": 371086,
+        "changingWithoutTimedOutput": {
+          "OBUF": 1
+        },
+        "monitoredPins": 16291,
+        "knownPinTransitions": 5407559,
+        "matchedSrlSamples": 12288,
+        "srlOutputChanges": {
+          "$auto$ff.cc:337:slice$77356": 1,
+          "$auto$ff.cc:337:slice$77363": 2009,
+          "$auto$ff.cc:337:slice$77381": 2010
+        },
+        "publicClockCheck": {
+          "checkpoint": "dd15b35c1d78603932db09dd40496ef915cdb2f946aad7c221f71b3eb9a6f2d9",
+          "functionalMonitor": "f99c26898e4537718457fe8f507095ec1dd7d09b1e62dce66d43b4918ecd0919",
+          "netlist": "3d192f9916cc3a6b67e840b9c7bdbfb127a82c05adb1101ab571346939ac56b2",
+          "originalLog": "9a49c4709fa30fd3961f5013abc1c0fa0d5de9f1bb18166cf16adbbb02b18f8a",
+          "pins": "f398fbf5cf6d22b01e494f43095c626e43c22e897597a581dde19954f37f713f",
+          "publicClocks": 4096,
+          "samples": "c8cbe8eaa80f8399f8a85120d6d116e211693160e9c30ce44bd085330257992b"
+        },
+        "identityBuffers": 4678,
+        "omitted": {
+          "io": 2,
+          "constant": 17966
+        },
+        "mailboxBits": 448,
+        "mailboxCells": 8,
+        "ramConnection": {
+          "cycle": 11,
+          "cell": "decoder.scheduler_2_mailbox.memory.0.0",
+          "port": "DOADO0",
+          "sink": "$abc$1288415$lut\\decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_2_2_2_next_inst.mailbox_response_data[0]",
+          "input": "A1",
+          "endPs": 3580
+        },
+        "srlLaunchPs": {
+          "$auto$ff.cc:337:slice$77381": 1102,
+          "$auto$ff.cc:337:slice$77363": 1109,
+          "$auto$ff.cc:337:slice$77356": 1102
+        }
+      },
+      "vivado": {
+        "dataConnections": 273350,
+        "timedConnections": 273349,
+        "timedCellArcs": 255369,
+        "changingWithoutTimedOutput": {
+          "OBUF": 1
+        },
+        "monitoredPins": 7770,
+        "knownPinTransitions": 2547936,
+        "matchedSrlSamples": 12288,
+        "srlOutputChanges": {
+          "flow_reg[20]_srl17": 2008,
+          "flow_reg[30]_srl9": 2011,
+          "reset_pipe_reg[2]_srl3": 1
+        },
+        "publicClockCheck": {
+          "checkpoint": "4a5ced3b1d12429c641c0b679f12e44005ed02a552ea547b2fd86359de94801d",
+          "functionalMonitor": "d1ee0231e09b7b74e67e5349d627c3d3f2ba405eee7599a8a2951e5aa9152396",
+          "netlist": "fabd5fa491571be99dc7ff67792416ea6b998248e1832a0ac12be2d88cbfc061",
+          "originalLog": "c49baeaa06914740a1e59f0f01c3d9c7eb79221f36a10cef2e0e06b648d30c66",
+          "pins": "81f20117404dca7ddf0093f1012d5a4d1aaeff72ad572838be32c528072686e5",
+          "publicClocks": 4096,
+          "samples": "40ddbecb73cd46dd2171349f64ea2bb431f4ba05e7515c8fbcb521869ff5668f"
+        }
+      }
+    }
+  },
+  "nativeWriter": "766908c1aaea8099051784febd4364a6f68fdba968eb5159a5c197ea5d037729",
+  "srlControls": {
+    "checkpoint": "8f6be4cd01604935a8ea18fd5567d065e9ab843dfc582d042c63192097c815e9",
+    "sdf": "7124aa5a2d9c71a41da4c407feae028fda21ea8bad760beb7bba8688e7118fbf",
+    "positive": "$auto$ff.cc:337:slice$77356",
+    "inverted": "$auto$ff.cc:337:slice$77363",
+    "dynamic": "$auto$ff.cc:337:slice$77381"
+  },
+  "connectedCombinationalArcs": {
+    "two": {
+      "timedStructuralArcPairs": {
+        "LUT6": 23520,
+        "LUT4": 12628,
+        "LUT2": 5497,
+        "LUT3": 5220,
+        "LUT1": 1450,
+        "LUT5": 13075,
+        "MUXF7": 6,
+        "MUXF8": 3,
+        "CARRY4": 6013
+      },
+      "missing": {},
+      "dspMissing": []
+    },
+    "four": {
+      "timedStructuralArcPairs": {
+        "LUT5": 39745,
+        "LUT4": 27920,
+        "LUT2": 10564,
+        "LUT3": 16506,
+        "LUT6": 49182,
+        "MUXF7": 24,
+        "MUXF8": 9,
+        "LUT1": 3528,
+        "CARRY4": 17443
+      },
+      "missing": {},
+      "dspMissing": []
+    }
+  },
+  "browserPicks": {
+    "two": {
+      "RAMB36E1": {
+        "cycle": 20,
+        "picked": [
+          "2.080 \u2192 3.307 ns \u00b7 12 switch-tile visits \u00b7 routed wire delay \u00b7 SDF 1.227 ns \u00b7 traced switch sum 1.227 ns \u00b7 decoder.scheduler_1_mailbox.memory.0.0/DOADO0 \u2192 $flatten\\decoder.$auto$ff.cc:337:slice$38744/D \u00b7 sampled output bit changed"
+        ]
+      }
+    },
+    "four": {
+      "SRL16E": {
+        "cycle": 2,
+        "picked": [
+          "Estimated 1.102 \u2192 1.732 ns \u00b7 unrouted endpoint span \u00b7 $auto$ff.cc:337:slice$77381/O6 \u2192 $abc$1288415$lut$0\\flow[31:0]/A1 \u00b7 sampled output bit changed"
+        ]
+      },
+      "SRLC32E": {
+        "cycle": 1,
+        "picked": [
+          "Estimated 1.109 \u2192 2.009 ns \u00b7 unrouted endpoint span \u00b7 $auto$ff.cc:337:slice$77363/O6 \u2192 $abc$1288415$lut$0\\flow[31:0]/A2 \u00b7 sampled output bit changed"
+        ]
+      },
+      "RAMB36E1": {
+        "cycle": 11,
+        "picked": [
+          "Estimated 2.080 \u2192 3.580 ns \u00b7 unrouted endpoint span \u00b7 decoder.scheduler_2_mailbox.memory.0.0/DOADO0 \u2192 $abc$1288415$lut\\decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_halo_cell__SharedService_0__2_2_2_2_next_inst.mailbox_response_data[0]/A1 \u00b7 sampled output bit changed"
+        ]
+      }
+    }
+  }
+}
