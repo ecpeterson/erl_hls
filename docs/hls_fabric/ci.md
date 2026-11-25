@@ -1,6 +1,6 @@
 # CI coverage
 
-Pull requests run the software tier automatically. Manual dispatch selects `all`, `software`, `components`, `phi` or `snowflake`; there is no duplicate run on merge to `main`.
+Pull requests run the software tier automatically when ready for review and on subsequent pushes. Drafts skip automatic jobs. Manual dispatch selects `all`, `software`, `components`, `phi` or `snowflake` in either state.
 
 The same entry point runs locally and in Actions, serially with one tool installation:
 
