@@ -127,7 +127,10 @@ export async function createFlow(replay, catalogs, asset) {
   mode.value = routed ? "routes" : nativeTiming ? "pins" : "depth";
   if (routed) {
     document.getElementById("native-flow-guide").textContent =
-      "openXC7 lines follow each sink’s switch tiles on the routed checkpoint. Select a line for its pins and delay source. Height accumulates nextpnr’s post-route SDF, including placement estimates for permuted LUT inputs.";
+      "openXC7 lines follow each sink’s switch tiles on the routed checkpoint. Select a line for its pins and delay source. " +
+      (routed.routedLutTiming
+        ? "Height accumulates nextpnr’s post-route SDF using the bound switches for resolved LUT input permutations."
+        : "Height accumulates nextpnr’s post-route SDF, including placement estimates for permuted LUT inputs.");
   }
   const vendorLane = replay.flow.vivado?.stateLane;
   if (replay.selectedPath && routed && (backends.length === 1 || vendorLane)) {
@@ -750,7 +753,9 @@ export async function createFlow(replay, catalogs, asset) {
         ? " · " +
           [
             "routed wire delay",
-            "permuted LUT input · predicted wire delay",
+            routed.routedLutTiming
+              ? "permuted LUT input · routed wire delay"
+              : "permuted LUT input · predicted wire delay",
             "unresolved wire delay",
           ][p.model.classes[i]]
         : "") +

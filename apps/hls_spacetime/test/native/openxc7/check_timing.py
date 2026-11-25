@@ -37,6 +37,17 @@ def check(capture: Path, reference: Path) -> None:
                 assert cell["attributes"]["SPACETIME_PORT_" + original] == row["net_origin"]
                 permuted |= int(pin[1:]) != int(original[1:]) + 1
     assert permuted
+    if "lut_route_delay_patch_sha256" in read("manifest.json")["timing"]:
+        # The independently traced permutation PIP must reach both halves of the fractured LUT.
+        sinks = {(row["net"], row["sink"], row["input"]): row for row in timing["sinks"]}
+        reached = set()
+        for net in read("routes.json")["nets"]:
+            for pin in net["pin_attachments"]:
+                if "lut_permutation_pip" in pin:
+                    cell, port = pin["pin"].rsplit("/", 1)
+                    assert sinks[net["id"], cell, port]["model"] == "routed"
+                    reached.add(cell)
+        assert {name for name, _ in halves.values()} <= reached
     # This fixture has scalar ports. nextpnr's SDF writer formats integer picoseconds.
     interconnect, logic = {}, {}
     instance = None

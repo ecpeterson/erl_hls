@@ -172,6 +172,8 @@ def flow_model(
     grid: ChipGrid,
     constids: Path,
     dest: Path,
+    *,
+    routed_lut_timing: bool = False,
 ) -> dict:
     """Join one routed implementation's directed switches and SDF to its ordered replay cell inventory."""
     result = route_result(paths["routing.log"].read_text())
@@ -218,6 +220,7 @@ def flow_model(
     )
     native_info["routed"] = dict(
         **stats,
+        **({"routedLutTiming": True} if routed_lut_timing else {}),
         coverage=counts,
         routeResult=result,
         checkpoint=digest(paths["routed.json"]),
@@ -300,7 +303,16 @@ def publish(
                 grid.part == live["part"] and grid.width == live["width"],
                 "grid identity",
             )
-            native_info = flow_model(paths, top, observed, path, grid, constids, dest)
+            native_info = flow_model(
+                paths,
+                top,
+                observed,
+                path,
+                grid,
+                constids,
+                dest,
+                routed_lut_timing=receipt.get("routedLutTiming", False),
+            )
         selected = native_info["routed"]["selected"]
         live["flow"] = dict(
             schema=1, sdf=old["flow"]["sdf"], vivado=vendor_info, openxc7=native_info
@@ -313,7 +325,11 @@ def publish(
         (entry,) = [e for e in index["examples"] if e["file"] == detail.name]
         require(digest(detail) == entry["sha256"], "transaction identity")
         resolved = sum(item["switches"] is not None for item in selected)
-        predicted = sum(item["status"] == "permuted" for item in selected)
+        predicted = (
+            sum(item["status"] == "permuted" for item in selected)
+            if not receipt.get("routedLutTiming")
+            else 0
+        )
         cell_ns = sum(item["cellPs"] for item in selected) / 1000
         net_ns = sum(item["netPs"] for item in selected) / 1000
         path["description"] += (

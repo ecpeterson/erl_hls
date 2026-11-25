@@ -258,8 +258,8 @@ void writeSpacetimeTiming(Context *ctx, const std::string &filename, int limit, 
                 continue;
             chargeSpacetime(limit);
             auto src = ctx->getNetinfoSourceWire(net);
-            auto dst = ctx->getNetinfoSinkWire(net, user);
-            bool endpoints = src != WireId() && dst != WireId() && driver.cell != nullptr;
+            auto dst = ctx->getNetinfoTimingSinkWire(net, user);
+            bool endpoints = src != WireId() && ctx->getNetinfoSinkWire(net, user) != WireId() && driver.cell != nullptr;
             auto cursor = dst;
             while (endpoints && cursor != src && net->wires.count(cursor)) {
                 chargeSpacetime(route_work);

@@ -1,0 +1,137 @@
+{
+  "evidenceClass": "Two-worker routed implementation and 4,096-clock functional replay witness",
+  "archive": "runs/spacetime-g4-parity-2026-11-24/two-phi-lut-route-delay",
+  "inventorySha256": "2ef0efe030adffaa7b1de75ea807ff36c7f6a191f4b34f7c8429924668083928",
+  "evidenceTarSha256": "46bd4536e8137484fb78a1b382b1fe8c5aad483c4c02e81fce0647ae0a2b568c",
+  "inputs": {
+    "nextpnrCommit": "68aeeb39f92e39bfb239c7e4a44dd93451fc1889",
+    "binarySha256": "17a5a11300b0a3b7f54508fe9ff987f8f0603589273f683ccbc12372a5fe0b10",
+    "timingPatchSha256": "85a890cea2769eea61ae41579824eaa4df3d7d120234239c13a5acde93ef9e47",
+    "chipdbSha256": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+    "placedSha256": "496aeedec2cc7507f0a19869e5eab15fdf5fad2ee9fe07480e89f5bbc58c6454",
+    "originalCaptureArchiveSha256": "edb643020952d57f83f81b958ca7f2680680e1eecc0d4794e0586da27b5ecda5",
+    "wireProbeArchiveSha256": "4ad9a39da1e35e03a00ca4a6631dff803e4646e9f5bb6771a7bd5d823ae91e6b",
+    "wireProbeSha256": "fd41f4f49b366cfac51863fffeafe43bb84043489bf8ab27480d67d51f65c4d7"
+  },
+  "route": {
+    "device": "xc7z030sbg485-1",
+    "router": "router2",
+    "seed": 1,
+    "targetMHz": 50,
+    "timingDriven": true,
+    "requestedNoTmdrivControl": true,
+    "unchangedPhysicalCheckpointSha256": "acc4e94d967c7745174aca6113a633e9f5a1c732c3d27f27e5c68597c3f1ac07",
+    "unchangedFixedRoutesSha256": "da81c18fcfb59a2247a4988e790ca104bfae2cfe448d4ced4bc6edd361570d38",
+    "fixedSwitches": 509097,
+    "oldSdfSha256": "074d0cbf0d26c0a88f44400e036424a8fd1c4a59deb002cb81e2443bd45b8376",
+    "newSdfSha256": "d307044e9bfeafba7ce915145c9ed3c16d613032ce18495adccab5eb5fdef523",
+    "reproducedWithAndWithoutFlag": [
+      "routed.json",
+      "fixed.txt",
+      "routed.sdf",
+      "report.json",
+      "sta.json"
+    ],
+    "fourWorkerPlacementRestoresTimingDriven": true
+  },
+  "sdf": {
+    "totalInterconnects": 127826,
+    "tracedDirect": 70088,
+    "tracedPermuted": 49910,
+    "permutedByLutBel": {
+      "B6LUT": 7413,
+      "D6LUT": 5323,
+      "A6LUT": 10970,
+      "C6LUT": 6139,
+      "A5LUT": 6248,
+      "C5LUT": 4563,
+      "D5LUT": 4155,
+      "B5LUT": 5099
+    },
+    "changedDelays": 49877,
+    "untracedConstantSinks": {
+      "$PACKER_GND_NET": 2824,
+      "$PACKER_VCC_NET": 5004
+    },
+    "sdfMinusSwitchSumPs": {
+      "0": 119427,
+      "-1": 571
+    },
+    "unchangedOtherLines": 622975
+  },
+  "staticTiming": {
+    "unit": "ps",
+    "before": {
+      "eligible": 36754,
+      "ranked": 100,
+      "netOccurrences": {
+        "permuted": 1172,
+        "direct": 515
+      },
+      "distinctReportNets": 205,
+      "clockPathPs": 24353,
+      "slackPs": -4353,
+      "fmaxMHz": 41.06
+    },
+    "after": {
+      "eligible": 36754,
+      "ranked": 100,
+      "netOccurrences": {
+        "permuted": 1223,
+        "direct": 488
+      },
+      "distinctReportNets": 215,
+      "clockPathPs": 24439,
+      "slackPs": -4439,
+      "fmaxMHz": 40.92
+    },
+    "ordinaryTextReports": {
+      "old": {
+        "reports": 2,
+        "pointsPerReport": 35,
+        "displayPrecisionPs": 100
+      },
+      "release": {
+        "reports": 2,
+        "pointsPerReport": 35,
+        "displayPrecisionPs": 100
+      }
+    },
+    "verboseSwitchReports": {
+      "reports": 2,
+      "branchesPerReport": 17,
+      "switchesPerReport": 199
+    },
+    "scope": "One worst clock path and 100 lowest-slack single-clock capture paths. Occurrences include repeated branches. All tested net increments equal the traced switch sum in integer picoseconds."
+  },
+  "gallery": {
+    "sha256": "9aeeba255e33aee435bd3589e71a4a6eba3cdcab741114fd559078dd76f9b88d",
+    "previousSha256": "5cc3cc39fb9c0c2b2d5afbf4f613230369e33b2a0eb4e7de2edbe0a7aa01c8e5",
+    "drawn": {
+      "permuted": 47289,
+      "direct": 53469
+    },
+    "stateBit84StageOrder": [
+      "RAM clock to capture D",
+      "capture clock to DSP operand"
+    ],
+    "stagePsBefore": [
+      4012.0,
+      5308.0
+    ],
+    "stagePsAfter": [
+      3697.0,
+      5215.0
+    ],
+    "changedArrivalRows": 143350,
+    "allConnectionAndArcRows": 187900,
+    "vivadoCheckpointSha256": "cf472bce3b89334701cf5fba28b144eb5e41d2ba000da8906d0715dc3410efdc"
+  },
+  "regressions": [
+    "Fractured XC7 LUT5/LUT6 route and 35 modeled queries",
+    "Native CTest, reconvergent endpoint, carry and three SDP block RAM modes",
+    "10 workload tests, 597 viewer tests, Spacetime Dialyzer and 11 quality checks",
+    "Browser checks on the corrected two-worker view, historical two-worker view and four-worker placement view"
+  ],
+  "followUp": "A bare --no-route import of the routed checkpoint fails in both builds during special-PIP name lookup. The comparison reroutes the frozen placement and verifies its physical output hashes."
+}

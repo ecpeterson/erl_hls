@@ -106,6 +106,7 @@ class RouteTree:
     ) -> None:
         """Reject duplicate or missing incoming fixed PIPs before tracing any branch."""
         self.parent, self.keys, self.candidates = {}, {}, defaultdict(list)
+        self.permutation_inputs = {}
         # nextpnr Property::to_string appends one space to an empty string property.
         rows = [] if routing in ("", " ") else routing.split(";")
         if len(rows) % 3:
@@ -129,6 +130,8 @@ class RouteTree:
             for key, wire in decoder.identify(tile, *local):
                 if end == wire:
                     self.candidates[key].append((end, switch))
+                    site, letter, pin = key
+                    self.permutation_inputs[end] = f"SITEWIRE/{site}/{letter}{pin}"
         if sum(bool(pip) for pip in self.bound.values()) != len(self.parent):
             raise ValueError("checkpoint contains unaccounted PIPs")
 
@@ -160,7 +163,13 @@ class RouteTree:
         bel_pin: str | None,
     ) -> tuple:
         """Trace the sink's bound pin or its unique net-owned LUT permutation, retaining a disconnected root."""
-        steps, root = self.trace(start, end)
+        # A net can own the nominal router terminal through a different physical LUT input.
+        shadowed = (
+            top["cells"][cell]["type"] == "SLICE_LUTX"
+            and bel_pin == port
+            and self.permutation_inputs.get(end, end) != end
+        )
+        steps, root = (None, None) if shadowed else self.trace(start, end)
         if steps is None and end and bel_pin == port:
             hit = lut_endpoint(top, net, cell, port, end, self.candidates)
             if hit:

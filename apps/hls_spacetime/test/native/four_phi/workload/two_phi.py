@@ -167,7 +167,14 @@ def build(run: Path, work: Path, chipdb: Path, constids: Path, out: Path) -> lis
         require(grid.part == receipt["part"] == "xc7z030sbg485-1", "chip identity")
         backend = mapped(run, work, out, "openxc7", grid, expected, planes="X")
         model = flow_model(
-            paths, top, inventory(out, backend["names"]), path, grid, constids, out
+            paths,
+            top,
+            inventory(out, backend["names"]),
+            path,
+            grid,
+            constids,
+            out,
+            routed_lut_timing=receipt.get("routedLutTiming", False),
         )
         for step in path["steps"]:
             step["tile"] = grid.owners[step["site"]]

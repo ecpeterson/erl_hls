@@ -256,13 +256,14 @@ def identities(
     core_harness: bool = False,
 ) -> dict:
     """Record exact shared RTL, simulation tools, observer, native inputs, checkpoint and vendor reports."""
-    require(
-        digest(router)
-        == json.loads(router.with_name("spacetime-build.json").read_text())["sha256"][
-            "nextpnr-spacetime"
-        ],
-        "nextpnr build mismatch",
-    )
+    build = json.loads(router.with_name("spacetime-build.json").read_text())["sha256"]
+    require(digest(router) == build["nextpnr-spacetime"], "nextpnr build mismatch")
+    patch = "nextpnr-xc7-lut-route-delay.patch"
+    if patch in build:
+        require(
+            build[patch] == digest(ROOT / "platforms/xc7/timing_coverage" / patch),
+            "LUT timing overlay",
+        )
     tools = {
         "yosys": yosys,
         "yosys-executable": yosys.parent.parent / "libexec/yosys",
@@ -279,6 +280,7 @@ def identities(
         "periodNs": 20,
         "seed": 1,
         "nativeStage": mode,
+        **({"routedLutTiming": True} if mode == "routed" and patch in build else {}),
         "pins": {"clock": "Y14", "activity": "V13"},
         "constraints": digest(XDC),
         "testbench": digest(HERE / "transaction_tb.sv"),

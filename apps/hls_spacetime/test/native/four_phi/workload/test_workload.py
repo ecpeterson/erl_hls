@@ -163,7 +163,7 @@ class WorkloadTest(unittest.TestCase):
                 route_result(bad)
 
     def test_routed_pin_branches(self) -> None:
-        """Keep a permuted LUT's physical route independent of nextpnr's placement delay fallback."""
+        """Require a unique switch to the physical input even when the net also owns its sibling."""
         top = {
             "cells": {
                 "src": {
@@ -191,6 +191,7 @@ class WorkloadTest(unittest.TestCase):
         tree.bound = {source: "", permuted: "pip"}
         tree.parent = {permuted: (source, "switch", "pip", 0)}
         tree.candidates = {("SLICE_X0Y0", "A", 2): [(permuted, "switch")]}
+        tree.permutation_inputs = {permuted: physical}
         query = (top, names, tree, "net", ("src", "Q"), ("sink", "A2"))
         self.assertEqual(trace(*query), ("permuted", [permuted]))
         tree.candidates.clear()
@@ -198,6 +199,10 @@ class WorkloadTest(unittest.TestCase):
         tree.bound[physical] = "exact"
         tree.parent[physical] = (source, "switch2", "exact", 1)
         self.assertEqual(trace(*query), ("routed", [physical]))
+        tree.permutation_inputs[physical] = permuted
+        self.assertEqual(trace(*query), ("unresolved", None))
+        tree.candidates[("SLICE_X0Y0", "A", 2)] = [(permuted, "switch")]
+        self.assertEqual(trace(*query), ("permuted", [permuted]))
         top["cells"]["sink"]["connections"]["A2"] = [8]
         with self.assertRaisesRegex(ValueError, "wrong packed pin"):
             trace(*query)

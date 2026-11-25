@@ -194,11 +194,11 @@
                           ctx->getDelayNS(total), net->name.c_str(ctx), ctx->getDelayNS(sink->budget), driver_loc.x,
                           driver_loc.y, sink_loc.x, sink_loc.y);
 -                log_info("               Sink %s.%s\n", sink_cell->name.c_str(ctx), sink->port.c_str(ctx));
--                if (ctx->verbose) {
+-                auto sink_wire = ctx->verbose ? ctx->getNetinfoTimingSinkWire(net, *sink) : WireId();
 +                message("               Sink %s.%s\n", sink_cell->name.c_str(ctx), sink->port.c_str(ctx));
-+                if (details && ctx->verbose) {
++                auto sink_wire = details && ctx->verbose ? ctx->getNetinfoTimingSinkWire(net, *sink) : WireId();
+                 if (sink_wire != WireId()) {
                      auto driver_wire = ctx->getNetinfoSourceWire(net);
-                     auto sink_wire = ctx->getNetinfoSinkWire(net, *sink);
 -                    log_info("                 prediction: %f ns estimate: %f ns\n",
 +                    message("                 prediction: %f ns estimate: %f ns\n",
                               ctx->getDelayNS(ctx->predictDelay(net, *sink)),

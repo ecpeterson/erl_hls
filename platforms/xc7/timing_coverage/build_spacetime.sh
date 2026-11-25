@@ -6,6 +6,7 @@ bash "$here/build.sh" "$@"
 stage=$(cd "$1" && pwd)
 revision=68aeeb39f92e39bfb239c7e4a44dd93451fc1889
 src="$stage/nextpnr-xilinx-$revision"
+patch -d "$src" -p1 < "$here/nextpnr-xc7-lut-route-delay.patch"
 patch -d "$src" -p1 < "$here/nextpnr-spacetime.patch"
 patch -d "$src" -p1 < "$here/nextpnr-spacetime-sta.patch"
 patch -d "$src" -p1 < "$here/nextpnr-spacetime-endpoints.patch"

@@ -317,6 +317,9 @@ def capture(args: argparse.Namespace) -> None:
             write_json(out / "routes.json", graph)
             manifest["routing"] = {"objects": graph["objects"], "unresolved": graph["unresolved"]}
     if args.timing_tools and part == "xc7z030sbg485-1":
+        lut_delay_patch = "nextpnr-xc7-lut-route-delay.patch"
+        if lut_delay_patch in build["sha256"]:
+            manifest["timing"]["lut_route_delay_patch_sha256"] = build["sha256"][lut_delay_patch]
         if "nextpnr-spacetime-carry.patch" in build["sha256"]:
             manifest["timing"]["carry_di_model"] = "maximum of available chipdb CARRY4 variants at the placed site"
         if "xc7_bram_model.inc" in build["sha256"]:

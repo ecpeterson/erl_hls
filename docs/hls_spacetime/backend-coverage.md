@@ -159,13 +159,13 @@ npm --prefix apps/hls_spacetime start -- --data "$PLACED_FLOW"
 
 The routed two-worker pair already exercises the scheduler RAM, capture register, DSP operand and correction path. Revisit four-worker routing for a specific congestion, fanout or implementation question. Feature coverage uses the smallest design that exercises the missing mode.
 
-1. **Obtain a legal native route.** The stock-map run ended its hour with 2,120 overused wires. Mapping the decoder and harness separately with the corrected SDP72 map retained 64,989 decoder primitives, 48 DSPs and 52 block RAMs. At 20 ns and seed 1 it ended its hour with 80 overused wires. A congestion-only retry of the original frozen placement reached one conflict, then stopped at two after 50 iterations without improvement. Both contested wires carry the same scheduler output bit. Try a different routing seed on that placement and compare the named conflicts before repeating a full placement. The four-worker native gallery still uses placement estimates. [Routing attempts and input identities](../../yap/hls_spacetime/g44-phi-routing.json)
+1. **Obtain a legal native route.** The stock-map run ended its hour with 2,120 overused wires. Mapping the decoder and harness separately with the corrected SDP72 map retained 64,989 decoder primitives, 48 DSPs and 52 block RAMs. At 20 ns and seed 1 it ended its hour with 80 overused wires. A retry requesting `--no-tmdriv` on the original frozen placement reached one conflict, then stopped at two after 50 iterations without improvement. That placement also restores timing-driven routing. Both contested wires carry the same scheduler output bit. Try a different routing seed on that placement and compare the named conflicts before repeating a full placement. The four-worker native gallery still uses placement estimates. [Routing attempts and input identities](../../yap/hls_spacetime/g44-phi-routing.json)
 2. **Bind the replay to that implementation.** Match packed pins, placement and simulated primitives to the routed checkpoint. Repeat the 4,096-clock replay and the public capture-lane checks if synthesis changes. Establish correspondence of the C32–C37 RAM transaction before attaching any route or timing to the comparison.
 3. **Qualify and expand the physical view.** Trace used switches to each sink on scheduler bit 84 first, including the inserted carry-input LUT and any packed LUT input permutation. Check the native model and timing provenance at each hop, then export the whole design. Report routed, direct, predicted and unresolved branches separately for the whole design and for C32. Registered hard-block timing and per-output-bit switching each need their own witnesses.
 
 #### Two-worker X-plane routed witness
 
-Both tools implemented the same two adjacent X workers, four RTL files, two-pin harness, XC7Z030-1 and 20 ns clock. Both routed the design. Vivado 2024.2 routed all 22,711 routable nets, with +5.588 ns setup and +0.052 ns hold slack. The seed-1 openXC7 placement took 119 seconds and congestion-only routing took 64 seconds, ending with zero conflicts and a 41.06 MHz estimate against 50 MHz.
+Both tools implemented the same two adjacent X workers, four RTL files, two-pin harness, XC7Z030-1 and 20 ns clock. Both routed the design. Vivado 2024.2 routed all 22,711 routable nets, with +5.588 ns setup and +0.052 ns hold slack. The seed-1 openXC7 placement took 119 seconds and the original route took 64 seconds, ending with zero conflicts. Its stored placement enables timing-driven router2. The pinned frontend imports that setting after parsing the CLI, overriding the historical `--no-tmdriv` argument. Omitting the flag reproduced the checkpoint, all 509,097 fixed switches, SDF and both timing reports byte for byte. The old delay lookup reported 41.06 MHz. With corrected LUT terminal lookup the same routed implementation reports 40.92 MHz against 50 MHz.
 
 The shared 4,096-clock stimulus elicited 36 status frames and six corrections. Each mapped functional replay checked the public digest against RTL on every clock, along with the physically retained capture and handshake registers for the enabled X plane. Vivado retains 102 X payload bits. The native mapping retains all 128. All observed primitives were located in their own implementation.
 
@@ -175,12 +175,14 @@ The shared 4,096-clock stimulus elicited 36 status frames and six corrections. E
 | Timed data connections in the viewer | 108,835 | 100,758 |
 | Connections with unresolved physical spans | 183 | 0 |
 | Active connections / primitive arcs at C90 | 821 / 3,294 | 674 / 3,284 |
-| RAM clock → capture D for state bit 84 | 2.809 ns | 4.012 ns |
-| Capture clock → executor DSP operand | 3.293 ns to A9 | 5.308 ns to A8 |
+| RAM clock → capture D for state bit 84 | 2.809 ns | 3.697 ns |
+| Capture clock → executor DSP operand | 3.293 ns to A9 | 5.215 ns to A8 |
 
 Vivado supplied a pin-to-pin interconnect delay for all 108,836 data connections. One lacks a clock-launched arrival. Of the 108,835 drawn, 100,094 have fabric switch tiles, 1,208 are direct and 7,350 pass through a selected site mux. The remaining 183 use dashed endpoint spans with their original delays. Applying the same check to the older four-worker Vivado gallery resolved 9,121 of its 9,861 dashed branches, leaving 740. On openXC7, 8,725 of 113,931 nonclock SDF connections lack a modeled launch and 4,448 more lack an observed endpoint. All 100,758 drawn branches have switch geometry and an SDF increment. Both panels interpolate height between endpoint times.
 
-Picking an openXC7 branch also reports the sum of nextpnr’s delay model along the traced switches. A read-only probe reproduced the original checkpoint, fixed routes and SDF byte for byte. The ordinary delay lookup reached the driver for 53,469 connections and equaled the independent sum on every one. For 47,289 permuted LUT inputs it used the placement predictor. The switch sum was lower on 28,905 branches, equal on 30 and higher on 18,354. The median absolute difference was 270 ps, spanning differences of −2,289 to +4,862 ps. SDF serialization rounded 473 lookup values down by 1 ps. Heights use the original SDF to preserve comparability with the tool report. [Timing, geometry and activity evidence](../../yap/hls_spacetime/g44-pin-coverage.json)
+Picking an openXC7 branch reports its SDF delay and an independent sum along the traced switches. After routing, nextpnr legalises the packed LUT inputs onto their physical pins. Its timing lookup now finds the retained permutation switch for that pin on the same net and LUT site. All 53,469 direct and 47,289 remapped connections in the paired viewer agree with the switch sums within 1 ps of SDF serialization. Both panels use their own SDF for the vertical axis. The earlier openXC7 gallery used placement predictions for the remapped population, with a median absolute difference of 270 ps. [Original wire audit](../../yap/hls_spacetime/g44-pin-coverage.json)
+
+Across the complete native SDF, 70,088 direct and 49,910 permuted connections agree with the physical branch sums. All 7,828 remaining records are distributed constant sinks outside the traced timing population. The ordinary clock report and the ranked endpoint export give a worst period of 24.439 ns and slack of −4.439 ns. The audit checked all 1,711 routing increments across the critical path and 100 ranked endpoint paths, their cumulative times and slack. The verbose clock report reproduced the ordered names and model delays of all 199 switches on the worst path. The checkpoint and functional replay retain their original identities. [Delay lookup and report checks](../../yap/hls_spacetime/g44-lut-route-delay.json)
 
 The activity filter checks settled output bits on 2,547 Vivado and 2,232 openXC7 carry, RAM and DSP outputs, with primitive-level filtering on other rows. Every known bit change fell on the same cell’s known-change mask in the original 4,096-clock replay. At C90 the Vivado executor DSP changed P[32] while P[41] held zero. Under the former cell filter 1,077 Vivado and 919 openXC7 net branches lit up. Requiring the observed driver bit on covered branches reduces those counts to 821 and 674.
 
@@ -188,10 +190,12 @@ Open `/workload.html?view=flow&cycle=90` in the paired gallery. In **Connections
 
 ```sh
 base=../hls_artifacts/runs/spacetime-g4-parity-2026-11-24
-npm --prefix apps/hls_spacetime start -- --data "$PWD/$base/two-phi-pin-coverage/gallery" --port 49715
+npm --prefix apps/hls_spacetime start -- --data "$PWD/$base/two-phi-lut-route-delay/gallery" --port 49715
 ```
 
-To rebuild, unpack `two-phi-routed/{capture,observations}.tar.gz` and `two-phi-paired/{vivado-reference,vivado-observations}.tar.gz` in a fresh directory. Use the pinned Java, RapidWright JAR, device data, chip database and Xilinx `constids.inc` from the witness. The paired input archive also records Vivado's synthesis inputs and Tcl. [Input identities and clock-by-clock checks](../../yap/hls_spacetime/g44-phi-routing.json)
+For the corrected routed timing, `two-phi-lut-route-delay/evidence.tar.gz` includes the SDF, both sets of timing reports, the patched tool and a replay command for the frozen placement. Its `verify-routes.py` uses the switch delays in `two-phi-pin-coverage/evidence.tar.gz`.
+
+To rebuild the original paired witness, unpack `two-phi-routed/{capture,observations}.tar.gz` and `two-phi-paired/{vivado-reference,vivado-observations}.tar.gz` in a fresh directory. Use the pinned Java, RapidWright JAR, device data, chip database and Xilinx `constids.inc` from the witness. The paired input archive also records Vivado's synthesis inputs and Tcl. [Input identities and clock-by-clock checks](../../yap/hls_spacetime/g44-phi-routing.json)
 
 ```sh
 workload=apps/hls_spacetime/test/native/four_phi/workload
@@ -236,7 +240,7 @@ To reproduce the named-output replay, restore the two-worker observation archive
 | Registered DSP arithmetic | Add native CLK-to-P and input timing checks for the witnessed MREG/PREG mode. Keep the internal register cycle explicit in the viewer. |
 | Block RAM write modes | The RAMB36E1 SDP72 READ_FIRST probe covers both output-register settings. Its WRITE_FIRST variant leaves 212 connected ports unqualified. When an application uses that mode, check same-address reads and writes and qualify its mode-specific timing. |
 | Activity on other output ports | Extend the named-pin monitor when another multi-output primitive or port is exercised. |
-| Routed delay at permuted LUT inputs | Teach nextpnr’s delay lookup to resolve the bound permutation. Rebuild SDF and timing reports, then recheck every branch against the qualified switch sum before using the new arrivals. |
+| Routed checkpoint import | The original and patched nextpnr binaries both fail in the Series-7 PIP-name import when reopening the routed JSON. Reproduce timing from the frozen placement and seed. Qualify the inverse PIP and wire-name mappings for direct checkpoint reopen. |
 | Site-internal and alternate-exit geometry | Resolve the remaining 183 two-worker and 740 four-worker spans using the saved physical endpoint and net exports. |
 
 1. **Distributed constant ties.** The 2,409 missing global-to-local constant branches are outside this visualization round. Their cut wires remain inspectable.
