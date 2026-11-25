@@ -1,0 +1,108 @@
+{
+  "archive": "runs/spacetime-g4-parity-2026-11-24/vivado-physical-branches",
+  "inventorySha256": "eac81592f1e1e30847147f0e11e608cc8d065fe50640ccc8db7a47f8577891db",
+  "evidenceTarSha256": "9ded3d1a5daea106585ff7f8e5c96f3c204c2a4962d0ea66d72306b3a7f93a43",
+  "scope": "Displayed clock-launched Vivado SDF rows on the two saved decoder checkpoints. Each split logical pin keeps one timing increment across all mapped physical pins.",
+  "rapidwrightJarSha256": "f5108093ae59d6dfacf9128d0f35e2e0a4340af492f6af185af8dfc197258d41",
+  "twoWorker": {
+    "timed": 108835,
+    "before": 183,
+    "after": 0,
+    "fabric": 100277,
+    "direct": 1208,
+    "mux": 7350,
+    "split": 183,
+    "ffBypass": 0,
+    "enableMuxes": 48,
+    "physicalBranches": 366,
+    "checkpoint": "cf472bce3b89334701cf5fba28b144eb5e41d2ba000da8906d0715dc3410efdc",
+    "sdf": "b20d7716baeeae189ef859850fbd9daef58dda76fd1c32110bc5491aa1651da2",
+    "edif": "f9a349cd8aa9e07e5485f3b50cbf9e03d009a8fe6be28ad5b618a335c7465ab7",
+    "sourceGallery": "9aeeba255e33aee435bd3589e71a4a6eba3cdcab741114fd559078dd76f9b88d",
+    "gallery": "df17aeab908f5e49996109400601562701e148c171b92c8e52577548f6074c29",
+    "routes": "a0d50c17325be3ab0eff7e9b8988b45d2cec47f00294bdcec5806f89540c315f",
+    "allExportedRowsSha256": "5bfde731c8f36e084ba163af835afae4ebbc0d7291293bb59ca1d132bb28cce4",
+    "independentVivadoTrace": {
+      "rows": 183,
+      "nets": 30,
+      "physicalPaths": 366,
+      "orderedPipVisits": 4167,
+      "rowsWithDistinctTilePaths": 2
+    },
+    "originalExport": {
+      "endpoints.tsv": "72fb30e2f6b565ab64653e3042fd1808fede0f025afdeef3ca7438328cebd047",
+      "nets.tsv": "db0ea104a69d3748232ffe257fcc2ea65c4be790e8048e574aaad424d08a8dc7",
+      "logical.edf": "f9a349cd8aa9e07e5485f3b50cbf9e03d009a8fe6be28ad5b618a335c7465ab7"
+    },
+    "orderedPipsSha256": "571932f728a5d9d6768aadd6c1eabd0f38866c73f0e2acad612d0c03a217bc98",
+    "focusedBrowser": {
+      "split": {
+        "cycle": 17,
+        "picks": [
+          "2.442 → 4.935 ns · 18 switch-tile visits · RAMB36_X0Y6/WEBWEL7 · one logical SDF delay for 2 physical pins",
+          "2.442 → 4.935 ns · 16 switch-tile visits · RAMB36_X0Y6/WEBWEU7 · one logical SDF delay for 2 physical pins"
+        ]
+      },
+      "paired": {
+        "cycle": 17,
+        "picks": [
+          "1.250 → 2.836 ns · 11 switch-tile visits · RAMB36_X2Y4/ADDRBWRADDRL6, RAMB36_X2Y4/ADDRBWRADDRU6 · one logical SDF delay for 2 physical pins",
+          "1.250 → 2.836 ns · 11 switch-tile visits · RAMB36_X2Y4/ADDRBWRADDRL6, RAMB36_X2Y4/ADDRBWRADDRU6 · one logical SDF delay for 2 physical pins"
+        ]
+      }
+    }
+  },
+  "fourWorker": {
+    "timed": 273349,
+    "before": 740,
+    "after": 0,
+    "fabric": 260265,
+    "direct": 3963,
+    "mux": 9121,
+    "split": 346,
+    "ffBypass": 394,
+    "enableMuxes": 56,
+    "physicalBranches": 1086,
+    "checkpoint": "4a5ced3b1d12429c641c0b679f12e44005ed02a552ea547b2fd86359de94801d",
+    "sdf": "3a360208ca9b32e89c943c66c2e4bb095fb9f22d1400b1ded903e7dbf66566b6",
+    "edif": "ed460ebf91a449a5a6708bcf9a0a39f503a8ae55bd72d1391c57168a98031e2f",
+    "sourceGallery": "15a41ae885827020db50c56e4bbb486f16c7abde4f0d5b16175f0c67969619ea",
+    "gallery": "3f35dfcccb02d90718abae32909c260a72342fc9d48bed5e5d6fb266d3cad25f",
+    "routes": "be16c88511edaec63a84b5a66657189d12f76b5e625ccf54314b8e47f9d42d3d",
+    "allExportedRowsSha256": "a31a6fdd62c3cc8ef658aff6c0f8a3d776f227456a122b077e607a6c1f859bb1",
+    "independentVivadoTrace": {
+      "rows": 740,
+      "nets": 178,
+      "physicalPaths": 1086,
+      "orderedPipVisits": 9421,
+      "rowsWithDistinctTilePaths": 7
+    },
+    "originalExport": {
+      "endpoints.tsv": "54112048c8fbf3dda7483907e114d0ce5801d551af8e14c4c456899645a5af6c",
+      "nets.tsv": "800dc0f41492f3fb12859fd38174ac5e1b01f292f40ad6d8a026183d743ab39f",
+      "logical.edf": "ed460ebf91a449a5a6708bcf9a0a39f503a8ae55bd72d1391c57168a98031e2f"
+    },
+    "orderedPipsSha256": "097d1f3ec589aa0b3662c673b34f73ef9cfc33f5203d20dbc8f5c1b9b3f8c9ed",
+    "focusedBrowser": {
+      "ff": {
+        "cycle": 3357,
+        "picks": [
+          "5.960 → 6.419 ns · 5 switch-tile visits · SLICE_X15Y49/DX via SLICE_X14Y52/DFFMUX.XOR->>OUT → DFF D→Q"
+        ]
+      },
+      "split": {
+        "cycle": 5,
+        "picks": [
+          "11.696 → 12.659 ns · 7 switch-tile visits · RAMB36_X5Y17/WEBWEL0 · one logical SDF delay for 2 physical pins",
+          "11.696 → 12.659 ns · 8 switch-tile visits · RAMB36_X5Y17/WEBWEU0 · one logical SDF delay for 2 physical pins"
+        ]
+      }
+    }
+  },
+  "checks": [
+    "Independent forward walks from Vivado get_nodes and get_pips matched every newly drawn switch in order.",
+    "Full exports preserved all previously qualified tile sequences, all SDF rows, activity masks, and the native data.",
+    "Chromium selected distinct and coincident RAM branches at C17, a D→Q pass-through at C3357 and split RAM branches at C5.",
+    "11 workload tests, 598 viewer tests, Spacetime Dialyzer and 11 repository quality checks."
+  ]
+}

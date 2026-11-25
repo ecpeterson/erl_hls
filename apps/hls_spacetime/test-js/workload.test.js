@@ -55,6 +55,37 @@ test("routed flow keeps an unresolved branch distinct from direct and located br
   assert.throws(() => decode(routes), /endpoint/);
 });
 
+test("one SDF row can drive two physical RAM pins by different routes", () => {
+  const decode = (paths) =>
+    decodeFlow(
+      new Uint8Array(16),
+      1,
+      Uint8Array.from([2, 0, 1, 0, 2, 0]),
+      1,
+      5,
+      new Uint8Array(2),
+      [["O", "WE"]],
+      paths,
+    );
+  const first = { sink: "RAM/WE0" },
+    second = { sink: "RAM/WE1", tiles: [1, 4] };
+  const m = decode({ 0: [first, second] });
+  assert.equal(m.nets, 1);
+  assert.deepEqual(
+    m.branches.get(0).map((b) => [...b.tiles]),
+    [
+      [1, 2],
+      [1, 4],
+    ],
+  );
+  assert.throws(() => decode({ 0: [first, first] }), /sink/);
+  assert.throws(
+    () => decode({ 0: [first, { ...second, tiles: [5] }] }),
+    /tiles/,
+  );
+  assert.throws(() => decode({ 1: [first] }), /row/);
+});
+
 test("placement timing retains packed ports with unknown route geometry", () => {
   const bytes = new Uint8Array(32);
   const pins = Uint8Array.from([0, 0, 1, 0]);

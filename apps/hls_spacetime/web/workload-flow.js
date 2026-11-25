@@ -28,7 +28,16 @@ export function decodeOutputActivity(rows, changes, count, edges, cycles) {
 }
 
 /** Validate the fixed-width edge rows and variable-length switch-tile lists before drawing. */
-export function decodeFlow(bytes, cells, routes, count, tiles, pins, ports) {
+export function decodeFlow(
+  bytes,
+  cells,
+  routes,
+  count,
+  tiles,
+  pins,
+  ports,
+  physicalRoutes,
+) {
   if (bytes.length % 16) throw Error("Incomplete flow edge record");
   const data = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const rows = bytes.length / 16;
@@ -75,7 +84,51 @@ export function decodeFlow(bytes, cells, routes, count, tiles, pins, ports) {
       if (words[at++] >= tiles) throw Error("Invalid switch tile");
   }
   if (at !== words.length) throw Error("Flow inventory mismatch");
-  return { ...model, offsets, words };
+  // The primary branch is packed with ordinary rows. Extra terminals share its logical SDF increment.
+  const branches = new Map();
+  for (const [key, paths] of Object.entries(physicalRoutes ?? {})) {
+    const row = Number(key),
+      offset = offsets[row],
+      length = words[offset];
+    if (
+      String(row) !== key ||
+      offset === undefined ||
+      length === 65535 ||
+      !Array.isArray(paths) ||
+      !paths.length
+    )
+      throw Error("Invalid physical route row");
+    const seen = new Set();
+    branches.set(
+      row,
+      paths.map(({ sink, via, tiles: extra }, index) => {
+        if (
+          typeof sink !== "string" ||
+          !sink ||
+          seen.has(sink) ||
+          (via !== undefined && typeof via !== "string")
+        )
+          throw Error("Invalid physical sink");
+        seen.add(sink);
+        const primary = index === 0;
+        if (
+          primary
+            ? extra !== undefined
+            : !Array.isArray(extra) ||
+              extra.some((t) => !Number.isInteger(t) || t < 0 || t >= tiles)
+        )
+          throw Error("Invalid physical switch tiles");
+        return {
+          sink,
+          via,
+          tiles: primary
+            ? words.subarray(offset + 1, offset + 1 + length)
+            : extra,
+        };
+      }),
+    );
+  }
+  return { ...model, offsets, words, branches };
 }
 
 /** Orthographic projection is affine; cache the four basis projections for these chip coordinates. */
@@ -156,6 +209,7 @@ export async function createFlow(replay, catalogs, asset) {
         w * h,
         pins,
         info.ports,
+        info.physicalRoutes,
       );
       let pinModel;
       if (b === "openxc7" && nativeTiming) {
@@ -362,34 +416,52 @@ export async function createFlow(replay, catalogs, asset) {
       ".";
   }
 
-  /** Build the visible net polyline in chip/time space. SDF supplies times only at its endpoints. */
-  function path(b, i, a, d, start, end) {
+  /** Project each physical sink branch with the one logical SDF row's start and end times. */
+  function paths(b, i, a, d, start, end) {
     const p = panels[b],
       m = p.model,
       tile = catalogs[b].tile;
-    const t = [tile[a]];
     const local = m.nets !== undefined && i >= m.nets;
-    const routed = !!m.offsets && !local;
-    const at = routed ? m.offsets[i] : 0,
-      n = routed ? m.words[at] : 0;
-    if (routed && n !== 65535) {
-      for (let j = 0; j < n; j++)
-        if (m.words[at + 1 + j] !== t.at(-1)) t.push(m.words[at + 1 + j]);
+    const at = m.offsets && !local ? m.offsets[i] : undefined;
+    const count = at === undefined ? undefined : m.words[at];
+    const branches = m.branches?.get(i);
+    function project(switches, physical) {
+      const t = [tile[a]];
+      for (const v of switches ?? []) if (v !== t.at(-1)) t.push(v);
+      if (t.at(-1) !== tile[d] || t.length === 1) t.push(tile[d]);
+      return {
+        i,
+        a,
+        d,
+        start,
+        end,
+        points: projectTimes(t, start, end, p.top),
+        dash: !local && switches === undefined,
+        pinsOnly: b === "openxc7" && !local && mode.value === "pins",
+        local,
+        switches: switches?.length ?? null,
+        physical,
+      };
     }
-    if (t.at(-1) !== tile[d] || t.length === 1) t.push(tile[d]);
-    const points = projectTimes(t, start, end, p.top);
-    return {
-      i,
-      a,
-      d,
-      start,
-      end,
-      points,
-      dash: !local && (!routed || n === 65535),
-      pinsOnly: b === "openxc7" && !local && mode.value === "pins",
-      local,
-      switches: n === 65535 ? null : n,
-    };
+    if (branches) {
+      // Distinct physical pins can occupy the same tile sequence at this zoom level.
+      const groups = new Map();
+      for (const branch of branches) {
+        const key = branch.tiles.join(" ");
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(branch);
+      }
+      return [...groups.values()].map((group) =>
+        project(group[0].tiles, group),
+      );
+    }
+    return [
+      project(
+        count === undefined || count === 65535
+          ? undefined
+          : m.words.subarray(at + 1, at + 1 + count),
+      ),
+    ];
   }
 
   /** Draw one Vivado clock segment from the indexed SDF arcs and its own routed switch list. */
@@ -408,13 +480,13 @@ export async function createFlow(replay, catalogs, asset) {
     for (const [j, i] of rows.entries()) {
       const a = m.data.getUint32(i * 16, true),
         d = m.data.getUint32(i * 16 + 4, true);
-      const edge = path("vivado", i, a, d, elapsed, elapsed + delays[j]);
+      const edges = paths("vivado", i, a, d, elapsed, elapsed + delays[j]);
       panel.active.add(catalogs.vivado.tile[a]);
       panel.active.add(catalogs.vivado.tile[d]);
-      if (!edge.local && edge.dash) missing++;
+      if (edges[0].dash) missing++;
       if (m.siteMuxes?.[i]) muxes++;
-      visits += edge.switches ?? 0;
-      panel.paths.push(edge);
+      for (const edge of edges) visits += edge.switches ?? 0;
+      panel.paths.push(...edges);
       elapsed += delays[j];
     }
     const name =
@@ -499,7 +571,7 @@ export async function createFlow(replay, catalogs, asset) {
           tile[d] < 0
         )
           continue;
-        const edge = path(
+        const edges = paths(
           b,
           i,
           a,
@@ -507,8 +579,8 @@ export async function createFlow(replay, catalogs, asset) {
           m.data.getFloat32(i * 16 + 8, true),
           m.data.getFloat32(i * 16 + 12, true),
         );
-        p.paths.push(edge);
-        if (edge.local) local++;
+        p.paths.push(...edges);
+        if (edges[0].local) local++;
         else nets++;
       }
       p.article.querySelector(".stat").textContent =
@@ -749,6 +821,17 @@ export async function createFlow(replay, catalogs, asset) {
       : "Depth " + start + " → " + end;
     p.article.querySelector(".flow-selection").textContent =
       timing +
+      (found.physical
+        ? " · " +
+          found.physical
+            .map(({ sink, via }) => sink + (via ? " via " + via : ""))
+            .join(", ") +
+          (p.model.branches.get(i).length > 1
+            ? " · one logical SDF delay for " +
+              p.model.branches.get(i).length +
+              " physical pins"
+            : "")
+        : "") +
       (p.model.classes && !found.local
         ? " · " +
           [

@@ -128,11 +128,11 @@ npm --prefix apps/hls_spacetime start -- --data "$PAIRED"
 
 Choose **3D signal flow** in the paired gallery. Opening `workload.html?view=flow&cycle=32` selects a busy clock. Drag either scene to orbit both, scroll to zoom and click a line for its endpoints. **Both primitives changing** selects connections between cells with known output changes at that clock. **Changing driver** also includes fanout to cells whose outputs stayed stable. The simulation observes settled primitive outputs. Pin-specific transitions, glitches and actual subcycle event times are unobserved.
 
-Vivado height uses maximum SDF arc delays, accumulated from a local launch clock pin through each reachable input and output. Bus-wide arcs expand over connected lanes. A net rises by its own interconnect delay. Switch-tile heights interpolate that delay along the retained directed branch. Of 273,350 non-launch-clock connections, 273,349 have a clock-launched arrival. Of those, 259,525 resolve through used PIPs, 3,963 have a direct connection and 9,861 retain dashed endpoint spans. All 2,823 consecutive net pin pairs across the 100 saved slow setup paths appear in the gallery, including repeated occurrences. Cell arcs use their individual delays. These structural arrival envelopes omit clock skew, timing exceptions and input sensitization.
+Vivado height uses maximum SDF arc delays, accumulated from a local launch clock pin through each reachable input and output. Bus-wide arcs expand over connected lanes. A net rises by its own interconnect delay. Switch-tile heights interpolate that delay along the retained directed branch. Of 273,350 non-launch-clock connections, 273,349 have a clock-launched arrival. Of those, 260,265 connect through fabric switches, 3,963 are direct and 9,121 use a selected site mux. All 2,823 consecutive net pin pairs across the 100 saved slow setup paths appear in the gallery, including repeated occurrences. Cell arcs use their individual delays. These structural arrival envelopes omit clock skew, timing exceptions and input sensitization.
 
 The original openXC7 logic-depth view shows 234,038 placed driver/sink cell pairs reachable from clocked boundaries. Its vertical axis counts combinational cells along the longest structural chain. Pairs collapse multiple pins on the same two cells. At C32 the default filter shows 4,565 Vivado net connections and 22,087 primitive arcs alongside 2,780 openXC7 pairs. The route and delay of the full native implementation remain open under G4.4b. [Flow evidence ledger](../../yap/hls_spacetime/g44-four-phi-flow.json)
 
-Serve `runs/spacetime-g4-parity-2026-11-24/four-phi-flow/gallery` from the artifact archive to use both the flow and placement views. To reproduce the flow sidecars from the paired replay, use its `RAPIDWRIGHT_PATH`, the JDK 21 executable, the same physical device database and the archived checkpoint's readable EDIF. Run under the preceding serial process-group guard with a fresh output directory.
+Serve `runs/spacetime-g4-parity-2026-11-24/vivado-physical-branches/four-gallery` from the artifact archive for the updated four-worker comparison. To reproduce the flow sidecars from the paired replay, use its `RAPIDWRIGHT_PATH`, the JDK 21 executable, the same physical device database and the archived checkpoint's readable EDIF. Run under the preceding serial process-group guard with a fresh output directory.
 
 ```sh
 python3 "$workload/flow.py" --gallery "$PAIRED" --run "$RUN" --archive "$REFERENCE_ARCHIVE" \
@@ -148,7 +148,7 @@ Pins use their placed tile coordinates. Local strokes show cell delays. Picking 
 
 Across the design, 204,760 packed pin connections and 364,736 primitive arcs have both clock-launched estimates and observed cells at both ends. At C32, the activity filter selects 3,484 connections and 64,664 primitive arcs. Bus-wide DSP timing can produce many coincident arcs. Cell-level activity cannot distinguish which bit propagated. The old C32 view drew 1,152 connections across multiple logic levels, with a maximum jump of 30. Along the ten-cell scheduler bit-84 path from RAM output `DOADO11` to DSP input `A7`, the nine modeled cell arcs sum to 4.002 ns and the nine predicted net increments sum to 11.565 ns. This is a structural estimate for that path. [Placement timing evidence and coverage](../../yap/hls_spacetime/g44-four-phi-placement-timing.json)
 
-Serve `runs/spacetime-g4-parity-2026-11-24/four-phi-placement-timing/gallery` from the project artifact archive. To reproduce from the flow gallery above, run under the same process-group guard.
+The original placement-timing gallery is archived under `four-phi-placement-timing/gallery`. To reproduce from the flow gallery above, run under the same process-group guard.
 
 ```sh
 python3 "$workload/placed_flow.py" --gallery "$FLOW" --run "$RUN" --router "$NEXTPNR_SPACETIME" --chipdb "$CHIPDB" --output "$PLACED_FLOW"
@@ -173,12 +173,12 @@ The shared 4,096-clock stimulus elicited 36 status frames and six corrections. E
 | --- | ---: | ---: |
 | Located primitives | 29,059 | 28,419 |
 | Timed data connections in the viewer | 108,835 | 100,758 |
-| Connections with unresolved physical spans | 183 | 0 |
+| Connections with unresolved physical spans | 0 | 0 |
 | Active connections / primitive arcs at C90 | 821 / 3,294 | 674 / 3,284 |
 | RAM clock → capture D for state bit 84 | 2.809 ns | 3.697 ns |
 | Capture clock → executor DSP operand | 3.293 ns to A9 | 5.215 ns to A8 |
 
-Vivado supplied a pin-to-pin interconnect delay for all 108,836 data connections. One lacks a clock-launched arrival. Of the 108,835 drawn, 100,094 have fabric switch tiles, 1,208 are direct and 7,350 pass through a selected site mux. The remaining 183 use dashed endpoint spans with their original delays. Applying the same check to the older four-worker Vivado gallery resolved 9,121 of its 9,861 dashed branches, leaving 740. On openXC7, 8,725 of 113,931 nonclock SDF connections lack a modeled launch and 4,448 more lack an observed endpoint. All 100,758 drawn branches have switch geometry and an SDF increment. Both panels interpolate height between endpoint times.
+Vivado supplied a pin-to-pin interconnect delay for all 108,836 data connections. One lacks a clock-launched arrival. Of the 108,835 drawn, 100,277 have fabric switch tiles, 1,208 are direct and 7,350 pass through a selected site mux. On openXC7, 8,725 of 113,931 nonclock SDF connections lack a modeled launch and 4,448 more lack an observed endpoint. All 100,758 drawn branches have switch geometry and an SDF increment. Both panels interpolate height between endpoint times.
 
 Picking an openXC7 branch reports its SDF delay and an independent sum along the traced switches. After routing, nextpnr legalises the packed LUT inputs onto their physical pins. Its timing lookup now finds the retained permutation switch for that pin on the same net and LUT site. All 53,469 direct and 47,289 remapped connections in the paired viewer agree with the switch sums within 1 ps of SDF serialization. Both panels use their own SDF for the vertical axis. The earlier openXC7 gallery used placement predictions for the remapped population, with a median absolute difference of 270 ps. [Original wire audit](../../yap/hls_spacetime/g44-pin-coverage.json)
 
@@ -190,7 +190,7 @@ Open `/workload.html?view=flow&cycle=90` in the paired gallery. In **Connections
 
 ```sh
 base=../hls_artifacts/runs/spacetime-g4-parity-2026-11-24
-npm --prefix apps/hls_spacetime start -- --data "$PWD/$base/two-phi-lut-route-delay/gallery" --port 49715
+npm --prefix apps/hls_spacetime start -- --data "$PWD/$base/vivado-physical-branches/gallery" --port 49715
 ```
 
 For the corrected routed timing, `two-phi-lut-route-delay/evidence.tar.gz` includes the SDF, both sets of timing reports, the patched tool and a replay command for the frozen placement. Its `verify-routes.py` uses the switch delays in `two-phi-pin-coverage/evidence.tar.gz`.
@@ -212,7 +212,11 @@ The artifact archive keeps the Vivado inputs, routed checkpoints, netlists, SDF 
 
 The September four-worker RTL produced 704 status frames per plane and zero corrections in 32,768 clocks. A separate current 2 × 1 X/Z build with one shard per plane emits corrections on both planes. The measurement harness preserves all 256 existing payload capture bits and adds two ready samples. Its RTL and the standard harness agreed on every accepted frame. Both the post-route Vivado netlist and the openXC7 synthesis netlist matched all 89 accepted 128-bit payloads and their clock indices, including six X and eleven Z corrections. The first X correction was accepted at C237 and the first Z correction at C239. Vivado routed all 45,119 routable nets. The original four-worker gallery and its openXC7 routing campaign retain their own checkpoints.
 
-A read-only Vivado query matched the physical BEL pins at both ends of every unresolved gallery branch. In the two-worker design, 7,293 of 7,533 branches stay inside one site and 240 belong to routed nets. In the four-worker design those counts are 8,371 and 1,490 of 9,861. The archive retains the logical EDIF, endpoint attachments, net route strings and assigned PIPs for resolving the switch paths offline. Offline inspection recovered the selected 55 ps two-worker span through CFFMUX from C6LUT/O6 to CFF/D at SLICE_X6Y21. The current gallery still marks it unresolved. The remaining work is to apply that binding across the gallery and qualify alternate site exits. [Reference inputs and measured coverage](../../yap/hls_spacetime/g44-vivado-references.json)
+#### Vivado block RAM and carry exits
+
+One logical block RAM address, enable or write-enable pin can drive two physical pins. The two-worker gallery contains 183 such connections and the four-worker gallery contains 346. The viewer draws both routes with the logical pin pair’s SDF delay. When the routes occupy the same sequence of tiles, picking the line lists both pins. Two pairs on the two-worker decoder and seven on the four-worker decoder diverge at tile resolution. The four-worker checkpoint also routes 394 carry connections through flip-flop sites configured for pass-through. Picking one shows the selected site mux and the D→Q exit.
+
+The two checkpoint exports cover every displayed, clock-launched Vivado connection. A separate walk of Vivado’s exported physical endpoint nodes and assigned PIPs checked all 1,452 recovered paths and 13,588 switch visits in order. The original bit-84 path still includes the 55 ps C6LUT/O6 → CFFMUX → CFF/D span at SLICE_X6Y21. [Physical branch checks](../../yap/hls_spacetime/g44-vivado-physical-branches.json)
 
 #### Dynamic shift-register taps
 
@@ -241,7 +245,6 @@ To reproduce the named-output replay, restore the two-worker observation archive
 | Block RAM write modes | The RAMB36E1 SDP72 READ_FIRST probe covers both output-register settings. Its WRITE_FIRST variant leaves 212 connected ports unqualified. When an application uses that mode, check same-address reads and writes and qualify its mode-specific timing. |
 | Activity on other output ports | Extend the named-pin monitor when another multi-output primitive or port is exercised. |
 | Routed checkpoint import | The original and patched nextpnr binaries both fail in the Series-7 PIP-name import when reopening the routed JSON. Reproduce timing from the frozen placement and seed. Qualify the inverse PIP and wire-name mappings for direct checkpoint reopen. |
-| Site-internal and alternate-exit geometry | Resolve the remaining 183 two-worker and 740 four-worker spans using the saved physical endpoint and net exports. |
 
 1. **Distributed constant ties.** The 2,409 missing global-to-local constant branches are outside this visualization round. Their cut wires remain inspectable.
 2. **Multicorner timing and other hard modes.** The XC7 estimate includes predicted wiring and compiled slice FF clock parameters. A new corner, generated/gated clock relationship, DSP register, SRL tap or RAM configuration needs its own pin, clock and mode evidence. Use a workload that exercises the class, then compare native and vendor reports on matched parts and constraints. The four-Phi replay supplies RAM addresses, enables and read latency for one memory. Same-address read/write collisions were exercised in the smaller inferred-memory witness.

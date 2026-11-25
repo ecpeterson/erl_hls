@@ -156,6 +156,33 @@ def inventory(gallery, ref):
     return gzip.decompress(p.read_bytes()).decode().splitlines()
 
 
+def route_geometry(route: str, grid: ChipGrid) -> tuple[str, list, list]:
+    """Decode one logical row's primary tile sequence and any additional physical sink routes."""
+    if route in {"?", "="}:
+        return ("unresolved" if route == "?" else "direct"), [], []
+    if route.startswith("@"):
+        return "siteMux", [], []
+    if not route.startswith("+"):
+        require(route, "empty Vivado route")
+        return "pipBranches", [grid.owners[t] for t in route.split()], []
+    fields = route[1:].split("\t")
+    require(len(fields) % 3 == 0, "incomplete physical branch")
+    primary, branches, seen = [], [], set()
+    for sink, via, path in zip(fields[::3], fields[1::3], fields[2::3], strict=True):
+        require(sink and sink not in seen and path, "invalid physical sink")
+        seen.add(sink)
+        tiles = [] if path == "=" else [grid.owners[t] for t in path.split()]
+        branch = {"sink": sink}
+        if via:
+            branch["via"] = via
+        if branches:
+            branch["tiles"] = tiles
+        else:
+            primary = tiles
+        branches.append(branch)
+    return "pipBranches", primary, branches
+
+
 def vendor_model(
     sdf: Path,
     dcp: Path,
@@ -190,26 +217,27 @@ def vendor_model(
         check=True,
     )
     geometry, rows, coverage = bytearray(), bytearray(), Counter()
-    site_muxes = {}
+    site_muxes, physical_routes = {}, {}
     require(grid.count < 65535, "tile index width")
     with traces.open() as f:
         for ((a, _), (b, _), start, end), line in zip(nets, f, strict=True):
             route = line.strip()
-            tiles = []
-            if route.startswith("@"):
-                site_muxes[len(rows) // ROW.size] = route[1:]
-                kind = "siteMux"
-            elif route in {"?", "="}:
-                kind = "direct" if route == "=" else "unresolved"
-            else:
-                require(route, "empty Vivado route")
-                tiles = [grid.owners[t] for t in route.split()]
-                kind = "pipBranches"
+            kind, tiles, branches = route_geometry(route, grid)
+            row = len(rows) // ROW.size
+            if branches:
+                physical_routes[row] = branches
+            if kind == "siteMux":
+                site_muxes[row] = route[1:]
             coverage[kind] += 1
             rows.extend(ROW.pack(a, b, start, end))
             geometry.extend(struct.pack("<H", 65535 if route == "?" else len(tiles)))
             geometry.extend(struct.pack(f"<{len(tiles)}H", *tiles))
-    vendor.update(coverage)
+    vendor.update(
+        {
+            key: coverage[key]
+            for key in ("pipBranches", "direct", "siteMux", "unresolved")
+        }
+    )
     for (a, _), (b, _), start, end in logic:
         rows.extend(ROW.pack(a, b, start, end))
     ports, pin_ids = {}, bytearray()
@@ -221,6 +249,7 @@ def vendor_model(
             pin_ids.extend(struct.pack("<H", ports[pair]))
     vendor.update(
         siteMuxes=site_muxes,
+        physicalRoutes=physical_routes,
         ports=list(ports),
         pins=asset(gallery, "vivado-flow-pins", pin_ids),
         edges=asset(gallery, "vivado-flow", rows),

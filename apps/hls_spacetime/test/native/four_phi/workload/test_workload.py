@@ -7,7 +7,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-from flow import ROW, arrivals, vivado
+from flow import ROW, arrivals, route_geometry, vivado
 from placed_flow import placed_rows
 from routed_flow import route_result, trace
 from openxc7_tree import RouteTree
@@ -161,6 +161,26 @@ class WorkloadTest(unittest.TestCase):
         ):
             with self.assertRaisesRegex(ValueError, "incomplete native route"):
                 route_result(bad)
+
+    def test_vivado_physical_sinks(self) -> None:
+        """Keep separate RAM pin routes under one timing row and reject duplicate terminal bindings."""
+        from types import SimpleNamespace
+
+        grid = SimpleNamespace(owners={"SRC": 2, "LOW": 3, "HIGH": 5})
+        route = "+RAM/L\t\tSRC LOW\tRAM/U\tRAM/ENABLE_MUX\tSRC HIGH"
+        kind, primary, paths = route_geometry(route, grid)
+        self.assertEqual((kind, primary), ("pipBranches", [2, 3]))
+        self.assertEqual(
+            paths,
+            [
+                {"sink": "RAM/L"},
+                {"sink": "RAM/U", "via": "RAM/ENABLE_MUX", "tiles": [2, 5]},
+            ],
+        )
+        with self.assertRaisesRegex(ValueError, "physical sink"):
+            route_geometry(route.replace("RAM/U", "RAM/L"), grid)
+        with self.assertRaisesRegex(ValueError, "incomplete"):
+            route_geometry("+RAM/L\t", grid)
 
     def test_routed_pin_branches(self) -> None:
         """Require a unique switch to the physical input even when the net also owns its sibling."""
