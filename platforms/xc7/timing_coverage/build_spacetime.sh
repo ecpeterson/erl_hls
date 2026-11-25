@@ -9,6 +9,7 @@ src="$stage/nextpnr-xilinx-$revision"
 patch -d "$src" -p1 < "$here/nextpnr-spacetime.patch"
 patch -d "$src" -p1 < "$here/nextpnr-spacetime-sta.patch"
 patch -d "$src" -p1 < "$here/nextpnr-spacetime-endpoints.patch"
+patch -d "$src" -p1 < "$here/nextpnr-spacetime-srl-origins.patch"
 cp "$here/spacetime.h" "$src/xilinx/spacetime.h"
 if [[ ${SPACETIME_CARRY_MODEL:-0} == 1 ]]; then
     patch -d "$src" -p1 < "$here/nextpnr-spacetime-carry.patch"

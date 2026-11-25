@@ -13,6 +13,7 @@ from routed_flow import route_result, trace
 from openxc7_tree import RouteTree
 from unittest.mock import Mock, patch
 from init_bits import configured
+from pin_activity import transitions
 from scopes import links
 import vivado_lane
 
@@ -23,6 +24,13 @@ from capture import check_mapping_log
 
 class WorkloadTest(unittest.TestCase):
     """Run small witnesses independently of the archived decoder and device databases."""
+
+    def test_per_output_clock_and_unknown_boundaries(self) -> None:
+        """A known change on one output must not light its steady or unknown sibling."""
+        with tempfile.TemporaryDirectory() as tmp:
+            samples = Path(tmp) / "pins.txt"
+            samples.write_text("00\n01\nx1\n10\nz0\n")
+            self.assertEqual(transitions(samples, 2, 5), bytes([0, 1, 0, 1, 0]))
 
     def test_registered_state_lane(self) -> None:
         """Check reset priority, disabled captures and known adjacent pin changes across the register."""

@@ -190,19 +190,24 @@ def vendor_model(
         check=True,
     )
     geometry, rows, coverage = bytearray(), bytearray(), Counter()
+    site_muxes = {}
     require(grid.count < 65535, "tile index width")
     with traces.open() as f:
         for ((a, _), (b, _), start, end), line in zip(nets, f, strict=True):
             route = line.strip()
-            mapped = route != "?"
-            tiles = (
-                [] if route in {"?", "="} else [grid.owners[t] for t in route.split()]
-            )
-            coverage[
-                "pipBranches" if tiles else "direct" if mapped else "unresolved"
-            ] += 1
+            tiles = []
+            if route.startswith("@"):
+                site_muxes[len(rows) // ROW.size] = route[1:]
+                kind = "siteMux"
+            elif route in {"?", "="}:
+                kind = "direct" if route == "=" else "unresolved"
+            else:
+                require(route, "empty Vivado route")
+                tiles = [grid.owners[t] for t in route.split()]
+                kind = "pipBranches"
+            coverage[kind] += 1
             rows.extend(ROW.pack(a, b, start, end))
-            geometry.extend(struct.pack("<H", len(tiles) if mapped else 65535))
+            geometry.extend(struct.pack("<H", 65535 if route == "?" else len(tiles)))
             geometry.extend(struct.pack(f"<{len(tiles)}H", *tiles))
     vendor.update(coverage)
     for (a, _), (b, _), start, end in logic:
@@ -215,6 +220,7 @@ def vendor_model(
                 ports[pair] = len(ports)
             pin_ids.extend(struct.pack("<H", ports[pair]))
     vendor.update(
+        siteMuxes=site_muxes,
         ports=list(ports),
         pins=asset(gallery, "vivado-flow-pins", pin_ids),
         edges=asset(gallery, "vivado-flow", rows),

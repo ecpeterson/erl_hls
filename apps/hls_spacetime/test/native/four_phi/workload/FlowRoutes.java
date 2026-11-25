@@ -25,7 +25,17 @@ class FlowRoutes {
         if (sw == null || dw == null) return "?";
         Net net = source.getSiteInst().getNetFromSiteWire(sw);
         if (net == null || net != sink.getSiteInst().getNetFromSiteWire(dw)) return "?";
-        if (source.getSiteInst() == sink.getSiteInst() && sw.equals(dw)) return "=";
+        if (source.getSiteInst() == sink.getSiteInst()) {
+            if (sw.equals(dw)) return "=";
+            SitePIP selected = null;
+            for (SitePIP pip : source.getSiteInst().getUsedSitePIPs()) {
+                if (!sw.equals(pip.getInputPin().getSiteWireName()) ||
+                    !dw.equals(pip.getOutputPin().getSiteWireName())) continue;
+                if (selected != null) return "?";
+                selected = pip;
+            }
+            if (selected != null) return "@" + selected;
+        }
         Set<Node> roots = new HashSet<>();
         for (SitePinInst pin : source.getAllSitePinsFromLogicalPin(pair[1], new ArrayList<>()))
             if (pin != null && pin.isOutPin() && pin.getNet() == net) roots.add(pin.getConnectedNode());

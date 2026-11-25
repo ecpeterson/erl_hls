@@ -1,7 +1,18 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { decodeFlow } from "../web/workload-flow.js";
+import { decodeFlow, decodeOutputActivity } from "../web/workload-flow.js";
 import { probeState, windowStart, unionMasks } from "../web/workload-model.js";
+
+test("output activity validates row bindings and the complete cycle inventory", () => {
+  const rows = Uint8Array.from([1, 0, 255, 255]);
+  const changes = Uint8Array.from([0, 2]);
+  assert.deepEqual(
+    [...decodeOutputActivity(rows, changes, 2, 2, 2).lanes],
+    [1, -1],
+  );
+  assert.throws(() => decodeOutputActivity(rows, changes, 1, 2, 2), /lane/);
+  assert.throws(() => decodeOutputActivity(rows, changes, 2, 2, 3), /activity/);
+});
 
 test("a known inactive valid is idle even when ready is unknown", () => {
   const bits = Uint8Array.from([0b1011, 0b0111, 0b1001, 0b0011]);

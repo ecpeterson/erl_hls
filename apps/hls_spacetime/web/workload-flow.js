@@ -10,6 +10,23 @@ import {
 const format = (n) => n.toLocaleString("en-US");
 const changed = (mask, i) => (mask[i >> 3] & (1 << i % 8)) !== 0;
 
+/** Bind optional row-to-output mappings to their own settled replay and timing checkpoint. */
+export function decodeOutputActivity(rows, changes, count, edges, cycles) {
+  const stride = Math.ceil(count / 8);
+  if (
+    !Number.isInteger(count) ||
+    count <= 0 ||
+    count > 32767 ||
+    rows.length !== edges * 2 ||
+    changes.length !== cycles * stride
+  )
+    throw Error("Incomplete output activity");
+  const lanes = new Int16Array(rows.buffer, rows.byteOffset, edges);
+  if (lanes.some((lane) => lane < -1 || lane >= count))
+    throw Error("Invalid output lane");
+  return { lanes, changes, stride };
+}
+
 /** Validate the fixed-width edge rows and variable-length switch-tile lists before drawing. */
 export function decodeFlow(bytes, cells, routes, count, tiles, pins, ports) {
   if (bytes.length % 16) throw Error("Incomplete flow edge record");
@@ -170,8 +187,37 @@ export async function createFlow(replay, catalogs, asset) {
           )
             throw Error("Route classes disagree with native geometry");
           pinModel.classes = classes;
+          if (routed.switchSumPs) {
+            const bytes = await asset(routed.switchSumPs);
+            if (bytes.length !== 4 * pinModel.nets)
+              throw Error("Incomplete native switch-delay sums");
+            pinModel.switchPs = new DataView(
+              bytes.buffer,
+              bytes.byteOffset,
+              bytes.byteLength,
+            );
+          }
         }
       }
+      const timing = b === "vivado" ? info : nativeTiming;
+      const activity = timing?.outputActivity;
+      if (activity) {
+        if (activity.checkpoint !== replay.checkpoints[b])
+          throw Error("Output activity belongs to a different checkpoint");
+        const [rows, changes] = await Promise.all([
+          asset(activity.rows),
+          asset(activity.changes),
+        ]);
+        const selected = b === "vivado" ? model : pinModel;
+        selected.activity = decodeOutputActivity(
+          rows,
+          changes,
+          activity.count,
+          selected.rows,
+          replay.cycles,
+        );
+      }
+      if (info.siteMuxes) model.siteMuxes = info.siteMuxes;
       const top =
         b === "vivado"
           ? Math.ceil(Math.max(model.top, replay.period) / 5) * 5
@@ -348,7 +394,8 @@ export async function createFlow(replay, catalogs, asset) {
     const m = panel.model;
     let elapsed = 0,
       visits = 0,
-      missing = 0;
+      missing = 0,
+      muxes = 0;
     const delays = rows.map(
       (i) =>
         m.data.getFloat32(i * 16 + 12, true) -
@@ -362,6 +409,7 @@ export async function createFlow(replay, catalogs, asset) {
       panel.active.add(catalogs.vivado.tile[a]);
       panel.active.add(catalogs.vivado.tile[d]);
       if (!edge.local && edge.dash) missing++;
+      if (m.siteMuxes?.[i]) muxes++;
       visits += edge.switches ?? 0;
       panel.paths.push(edge);
       elapsed += delays[j];
@@ -377,7 +425,10 @@ export async function createFlow(replay, catalogs, asset) {
       " ns · " +
       visits +
       " switch-tile visits" +
-      (missing ? ` · ${missing} unresolved branch${missing === 1 ? "" : "es"}` : "");
+      (muxes ? ` · ${muxes} site mux${muxes === 1 ? "" : "es"}` : "") +
+      (missing
+        ? ` · ${missing} unresolved branch${missing === 1 ? "" : "es"}`
+        : "");
     stageActivity(panel, cycle, vendorLane.transitions);
   }
 
@@ -427,11 +478,19 @@ export async function createFlow(replay, catalogs, asset) {
         if (tile[i] >= 0 && changed(mask, i)) p.active.add(tile[i]);
       let nets = 0,
         local = 0;
+      const activity = m.activity;
+      const laneMask = activity?.changes.subarray(
+        cycle * activity.stride,
+        (cycle + 1) * activity.stride,
+      );
       for (let i = 0; i < m.rows; i++) {
         const a = m.data.getUint32(i * 16, true),
           d = m.data.getUint32(i * 16 + 4, true);
         if (
           !changed(mask, a) ||
+          (activity &&
+            activity.lanes[i] >= 0 &&
+            !changed(laneMask, activity.lanes[i])) ||
           (filter === "both" && !changed(mask, d)) ||
           tile[a] < 0 ||
           tile[d] < 0
@@ -462,7 +521,8 @@ export async function createFlow(replay, catalogs, asset) {
                 : " estimated pin connections · ") +
               format(local) +
               " cell arcs"
-            : " connected cell pairs");
+            : " connected cell pairs") +
+        (activity ? " · observed output bits where available" : "");
       p.article.querySelector(".flow-selection").textContent =
         nets || local
           ? b === "vivado" || (routed && timed)
@@ -682,7 +742,7 @@ export async function createFlow(replay, catalogs, asset) {
               : "endpoint span"
             : found.switches
               ? found.switches + " switch-tile visits"
-              : "direct connection")
+              : (p.model.siteMuxes?.[i] ?? "direct connection"))
       : "Depth " + start + " → " + end;
     p.article.querySelector(".flow-selection").textContent =
       timing +
@@ -693,6 +753,13 @@ export async function createFlow(replay, catalogs, asset) {
             "permuted LUT input · predicted wire delay",
             "unresolved wire delay",
           ][p.model.classes[i]]
+        : "") +
+      (p.model.switchPs && !found.local
+        ? " · SDF " +
+          (end - start).toFixed(3) +
+          " ns · traced switch sum " +
+          (p.model.switchPs.getUint32(i * 4, true) / 1000).toFixed(3) +
+          " ns"
         : "") +
       " · " +
       p.names[a] +

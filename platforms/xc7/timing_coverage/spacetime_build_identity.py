@@ -10,6 +10,7 @@ def write_identity(stage: Path) -> None:
     here = Path(__file__).resolve().parent
     inputs = [stage / "nextpnr.tar.gz", stage / "eigen.tar.gz", here / "spacetime.h",
               here / "nextpnr-spacetime-sta.patch", here / "nextpnr-spacetime-endpoints.patch",
+              here / "nextpnr-spacetime-srl-origins.patch",
               here / "nextpnr-coverage.patch", here / "nextpnr-spacetime.patch",
               here.parent / "lut_legality/nextpnr-output-pin.patch",
               here.parent / "lut_legality/nextpnr-pin-origins.patch", stage / "bin/nextpnr-spacetime"]

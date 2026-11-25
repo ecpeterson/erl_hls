@@ -1,0 +1,434 @@
+{
+  "archive": "runs/spacetime-g4-parity-2026-11-24/two-phi-pin-coverage",
+  "inventorySha256": "63e14de54c90a355602714f4a45f4f8485ea4c75c1091e841f0246713bf7ab23",
+  "gallerySha256": "5cc3cc39fb9c0c2b2d5afbf4f613230369e33b2a0eb4e7de2edbe0a7aa01c8e5",
+  "fourGallerySha256": "15a41ae885827020db50c56e4bbb486f16c7abde4f0d5b16175f0c67969619ea",
+  "tools": {
+    "yosys-executable": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+    "nextpnr": "369e8a856e33270e3888a33206dc58f234b58f2c3f003da7ff0d0f9618661473",
+    "chipdb": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+    "iverilog": "5df81b269e1ff2c965dd00ad5a8071ca17717f416003b3661a18b2dde430e73c",
+    "vvp": "1a9bdf1f40102f64f015514f5069f99a5dd9f9f38de343743ef4c169fb358392"
+  },
+  "checkpoints": {
+    "openxc7": "acc4e94d967c7745174aca6113a633e9f5a1c732c3d27f27e5c68597c3f1ac07",
+    "vivado": "cf472bce3b89334701cf5fba28b144eb5e41d2ba000da8906d0715dc3410efdc"
+  },
+  "cycles": 4096,
+  "srl": {
+    "srl16e": {
+      "bel": "SLICE_X0Y99/A6LUT",
+      "packedOrigins": {
+        "A2": "A0",
+        "A3": "A1",
+        "A4": "A2",
+        "A5": "A3"
+      },
+      "sdfMaxPs": {
+        "A2->O6": 124.0,
+        "A3->O6": 124.0,
+        "A4->O6": 124.0,
+        "A5->O6": 124.0
+      },
+      "setupHoldRecords": 0,
+      "routedSha256": "221b97c40548297d17943f3018fa20ccab3bb6735fe9ae797c5b94b4ffc66eed",
+      "fixedSha256": "acfb071651a505341d1004ec723f1fe59ac852009997bac2341eacdec6bf0816",
+      "sdfSha256": "906725f63ffb68cd17a3d64468744bb5c726c62ae8552a1e76f83693f67c44b5"
+    },
+    "srlc32e": {
+      "bel": "SLICE_X0Y99/A6LUT",
+      "packedOrigins": {
+        "A2": "A[0]",
+        "A3": "A[1]",
+        "A4": "A[2]",
+        "A5": "A[3]",
+        "A6": "A[4]"
+      },
+      "sdfMaxPs": {
+        "A2->O6": 124.0,
+        "A3->O6": 124.0,
+        "A4->O6": 124.0,
+        "A5->O6": 124.0,
+        "A6->O6": 124.0
+      },
+      "setupHoldRecords": 0,
+      "routedSha256": "b088a3976d3c1909573e90511e62ac711201c056207cd6bc5fb9561c1f0fbfaf",
+      "fixedSha256": "4d09128bd7cac399ce24ab2ac02b57597b942ee0e36ffbc1b4f29828755d1cbc",
+      "sdfSha256": "d60573e1eb2bcd6d7052c458ed22dfa4c57eb1ad2c9ca90758f96d0475bbac4b"
+    },
+    "forcedSrl16e5LutPackOnly": {
+      "stage": "packed",
+      "bel": "SLICE_X0Y99/A5LUT",
+      "origins": {
+        "X_ORIG_PORT_A3": "A1",
+        "X_ORIG_PORT_O5": "Q",
+        "X_ORIG_PORT_A4": "A2",
+        "X_ORIG_PORT_CLK": "CLK",
+        "X_ORIG_PORT_WE": "CE",
+        "X_ORIG_PORT_A5": "A3",
+        "X_ORIG_PORT_A2": "A0",
+        "X_ORIG_PORT_DI1": "D"
+      },
+      "packed": "f920f61aedddc663eadf1b1bd57fc4c514127ca11539a7e32052f9270a190daa"
+    }
+  },
+  "registeredDSP": {
+    "vivado": {
+      "instance": "pipeline_output_reg",
+      "ioPathMaxPs": {
+        "CLK->P[47:0]": 383.0
+      },
+      "setupHoldRecords": 42,
+      "setupHoldPins": [
+        "ALUMODE[3:0]",
+        "A[29:0]",
+        "B[17:0]",
+        "CARRYCASCIN",
+        "CARRYIN",
+        "CARRYINSEL[2:0]",
+        "CEAD",
+        "CEC",
+        "CED",
+        "CEM",
+        "CEP",
+        "C[47:0]",
+        "INMODE[4:0]",
+        "MULTSIGNIN",
+        "OPMODE[6:0]",
+        "PCIN[47:0]",
+        "RSTALLCARRYIN",
+        "RSTC",
+        "RSTD",
+        "RSTM",
+        "RSTP"
+      ],
+      "netlistSha256": "4a24f93e1e523a7e95ad693ed8834c022f0f0e2b535bbc4775605cde165e0c80",
+      "sdfSha256": "7ab7864cd8e48077acaf65267e1163e6de7258481abc6756b452a46223881b58"
+    },
+    "native": {
+      "instance": "$mul$micro.v:29$26",
+      "ioPathMaxPs": {},
+      "setupHoldRecords": 0,
+      "setupHoldPins": [],
+      "netlistSha256": "ddb4e501100442b4fecb21c41a7232d2338a636dab298ec95c1f50f244539d7d",
+      "sdfSha256": "fbe47635f3795f61d53e7a5392f9c3931a6cc93892c8aed15c523d8397c06b29"
+    },
+    "clocks": 512,
+    "successiveCaptures": 511,
+    "nonzeroProducts": 512,
+    "rtlSha256": "e704229c757bdd6788dd2cd4160836aec517974305d368f0f5868fca3144fc6f",
+    "mreg": 1,
+    "preg": 1,
+    "areg": 0,
+    "breg": 0,
+    "part": "xc7z030sbg485-1",
+    "periodNs": 10
+  },
+  "nativeWire": {
+    "connections": 100758,
+    "routed": 53469,
+    "predicted": 47289,
+    "sdfMinusLookupPs": {
+      "0": 100285,
+      "-1": 473
+    },
+    "directLookupEqualsSum": 53469,
+    "sumLess": 28905,
+    "sumEqual": 30,
+    "sumGreater": 18354,
+    "medianDifferencePs": -123,
+    "medianAbsDifferencePs": 270,
+    "minDifferencePs": -2289,
+    "maxDifferencePs": 4862,
+    "examples": {
+      "largestOverestimate": {
+        "source": [
+          "$flatten\\decoder.$auto$ff.cc:337:slice$41550",
+          "Q"
+        ],
+        "sink": [
+          "$flatten\\decoder.$auto$xilinx_dffopt.cc:341:execute$529723",
+          "A2"
+        ],
+        "net": "decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_syndrome_replay_cell__SharedService_0__2_0_0_2_2_next_inst.materialized_fifo_fifo__executor_result_.is_full_bool",
+        "switches": 18,
+        "ps": 3396,
+        "sdfPs": 5685,
+        "deltaPs": -2289
+      },
+      "largestUnderestimate": {
+        "source": [
+          "$flatten\\decoder.$auto$ff.cc:337:slice$41525",
+          "Q"
+        ],
+        "sink": [
+          "$flatten\\decoder.$abc$510044$lut\\application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_syndrome_replay_cell__SharedService_0__2_0_0_2_2_next_inst.__phi_syndrome_replay_cell__SharedLoader_0__0_1_next_inst.tuple_index_143569[223]",
+          "A4"
+        ],
+        "net": "decoder.application.__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.__phi_syndrome_replay_cell__SharedService_0__2_0_0_2_2_next_inst.__phi_syndrome_replay_cell__SharedLoader_0__0_1_next_inst.p0_valid__1",
+        "switches": 46,
+        "ps": 7622,
+        "sdfPs": 2760,
+        "deltaPs": 4862
+      }
+    },
+    "branchDataSHA256": "9abdf021d6fa7d34031233e2b74afbc15494e038e20db672e476e02546839369",
+    "sdf": "074d0cbf0d26c0a88f44400e036424a8fd1c4a59deb002cb81e2443bd45b8376",
+    "checkpoint": "acc4e94d967c7745174aca6113a633e9f5a1c732c3d27f27e5c68597c3f1ac07",
+    "fixed": "da81c18fcfb59a2247a4988e790ca104bfae2cfe448d4ced4bc6edd361570d38",
+    "probeTSVSha256": "fd41f4f49b366cfac51863fffeafe43bb84043489bf8ab27480d67d51f65c4d7",
+    "binarySha256": "b6c9aa08c11a8380a442b578992ee93b955f9a150fdef48129530bbbb493e739",
+    "signedDifference": "Traced switch sum minus native predictor in picoseconds; SDF serialization compared separately."
+  },
+  "vivadoWire": {
+    "timedConnections": 108835,
+    "pipBranches": 100094,
+    "direct": 1208,
+    "siteMux": 7350,
+    "unresolved": 183,
+    "fourWorkerRecheck": {
+      "counts": {
+        "siteMux": 9121,
+        "unresolved": 740
+      },
+      "checkpoint": "4a5ced3b1d12429c641c0b679f12e44005ed02a552ea547b2fd86359de94801d",
+      "edif": "ed460ebf91a449a5a6708bcf9a0a39f503a8ae55bd72d1391c57168a98031e2f",
+      "queries": "6ccd87964c0ac5436be5c28eac8af75b2b47935d538b4f51a5abb24b58ef00f3"
+    }
+  },
+  "settledOutputActivity": {
+    "vivado": {
+      "count": 2547,
+      "lanesPerKind": {
+        "CARRY4": 1300,
+        "DSP48E1": 258,
+        "RAMB36E1": 944,
+        "RAMB18E1": 45
+      },
+      "netRows": 5816,
+      "arcRows": 14844,
+      "knownLaneTransitions": 226651,
+      "clocks": {
+        "90": {
+          "old": [
+            1077,
+            6202
+          ],
+          "current": [
+            821,
+            3294
+          ],
+          "example": {
+            "cell": "decoder/application/__phi_decoder_profile_topology__SchedulerGrid_0_next_inst/__phi_halo_cell__SharedService_0__2_1_0_2_2_next_inst/__phi_halo_cell__SharedExecutor_0_next_inst/smul42b_25b_x_17b_return",
+            "changed": "P[32]",
+            "change": "01",
+            "steady": "P[41]",
+            "held": "0"
+          },
+          "siblings": {
+            "DSP48E1": {
+              "cell": "decoder/application/__phi_decoder_profile_topology__SchedulerGrid_0_next_inst/__phi_halo_cell__SharedService_0__2_1_0_2_2_next_inst/__phi_halo_cell__SharedExecutor_0_next_inst/smul42b_25b_x_17b_return",
+              "changed": "P[32]",
+              "change": "01",
+              "steady": "P[41]",
+              "held": "0"
+            },
+            "CARRY4": {
+              "cell": "decoder/application/__phi_decoder_profile_topology__SchedulerGrid_0_next_inst/__phi_halo_cell__SharedService_0__2_1_0_2_2_next_inst/__phi_halo_cell__SharedLoader_0__1_8_next_inst/p0_bit_slice_91264_reg[4]_i_3",
+              "changed": "O[3]",
+              "change": "01",
+              "steady": "CO[3]",
+              "held": "0"
+            }
+          }
+        },
+        "3640": {
+          "old": [
+            2707,
+            10173
+          ],
+          "current": [
+            2411,
+            7733
+          ],
+          "example": {
+            "cell": "decoder/application/__phi_decoder_profile_topology__SchedulerGrid_0_next_inst/__phi_halo_cell__SharedService_0__2_1_0_2_2_next_inst/__phi_halo_cell__SharedExecutor_0_next_inst/buf__1_reg[338]_i_2",
+            "changed": "O[3]",
+            "change": "10",
+            "steady": "CO[3]",
+            "held": "0"
+          },
+          "siblings": {
+            "CARRY4": {
+              "cell": "decoder/application/__phi_decoder_profile_topology__SchedulerGrid_0_next_inst/__phi_halo_cell__SharedService_0__2_1_0_2_2_next_inst/__phi_halo_cell__SharedExecutor_0_next_inst/buf__1_reg[338]_i_2",
+              "changed": "O[3]",
+              "change": "10",
+              "steady": "CO[3]",
+              "held": "0"
+            },
+            "DSP48E1": {
+              "cell": "decoder/application/__phi_decoder_profile_topology__SchedulerGrid_0_next_inst/__phi_halo_cell__SharedService_0__2_1_0_2_2_next_inst/__phi_halo_cell__SharedExecutor_0_next_inst/smul42b_25b_x_17b_return",
+              "changed": "P[38]",
+              "change": "10",
+              "steady": "P[40]",
+              "held": "0"
+            }
+          }
+        }
+      }
+    },
+    "openxc7": {
+      "count": 2232,
+      "lanesPerKind": {
+        "DSP48E1": 318,
+        "CARRY4": 1149,
+        "RAMB18E1": 765
+      },
+      "netRows": 4880,
+      "arcRows": 13526,
+      "knownLaneTransitions": 207825,
+      "clocks": {
+        "90": {
+          "old": [
+            919,
+            7024
+          ],
+          "current": [
+            674,
+            3284
+          ],
+          "example": {
+            "cell": "$flatten\\decoder.\\application.\\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\\__phi_halo_cell__SharedService_0__2_1_0_2_2_next_inst.\\__phi_halo_cell__SharedExecutor_0_next_inst.$mul$/Users/ecpeterson/Documents/code/erl_xls/_build/g4-legal-two/profile-v2/.compiled-releases/2e0c6abb60c3f0e3016f07b04fabce4c0a6733c11164c46911461a40d5a6738e/phi_decoder_profile.v:2511$2977",
+            "changed": "P31",
+            "change": "01",
+            "steady": "P34",
+            "held": "0"
+          },
+          "siblings": {
+            "DSP48E1": {
+              "cell": "$flatten\\decoder.\\application.\\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\\__phi_halo_cell__SharedService_0__2_1_0_2_2_next_inst.\\__phi_halo_cell__SharedExecutor_0_next_inst.$mul$/Users/ecpeterson/Documents/code/erl_xls/_build/g4-legal-two/profile-v2/.compiled-releases/2e0c6abb60c3f0e3016f07b04fabce4c0a6733c11164c46911461a40d5a6738e/phi_decoder_profile.v:2511$2977",
+              "changed": "P31",
+              "change": "01",
+              "steady": "P34",
+              "held": "0"
+            },
+            "CARRY4": {
+              "cell": "$flatten\\decoder.$auto$alumacc.cc:512:replace_alu$20158.genblk1.slice[0].genblk1.carry4",
+              "changed": "O1",
+              "change": "01",
+              "steady": "O2",
+              "held": "0"
+            }
+          }
+        },
+        "3640": {
+          "old": [
+            2211,
+            10340
+          ],
+          "current": [
+            1902,
+            6573
+          ],
+          "example": {
+            "cell": "$flatten\\decoder.\\application.\\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\\__phi_halo_cell__SharedService_0__2_1_0_2_2_next_inst.\\__phi_halo_cell__SharedExecutor_0_next_inst.$mul$/Users/ecpeterson/Documents/code/erl_xls/_build/g4-legal-two/profile-v2/.compiled-releases/2e0c6abb60c3f0e3016f07b04fabce4c0a6733c11164c46911461a40d5a6738e/phi_decoder_profile.v:2511$2977",
+            "changed": "P34",
+            "change": "10",
+            "steady": "P33",
+            "held": "0"
+          },
+          "siblings": {
+            "DSP48E1": {
+              "cell": "$flatten\\decoder.\\application.\\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\\__phi_halo_cell__SharedService_0__2_1_0_2_2_next_inst.\\__phi_halo_cell__SharedExecutor_0_next_inst.$mul$/Users/ecpeterson/Documents/code/erl_xls/_build/g4-legal-two/profile-v2/.compiled-releases/2e0c6abb60c3f0e3016f07b04fabce4c0a6733c11164c46911461a40d5a6738e/phi_decoder_profile.v:2511$2977",
+              "changed": "P34",
+              "change": "10",
+              "steady": "P33",
+              "held": "0"
+            },
+            "CARRY4": {
+              "cell": "$flatten\\decoder.$auto$alumacc.cc:512:replace_alu$20125.genblk1.slice[0].genblk1.carry4",
+              "changed": "O2",
+              "change": "01",
+              "steady": "O1",
+              "held": "0"
+            }
+          }
+        }
+      }
+    }
+  },
+  "browser": {
+    "default": "C3640 \u00b7 1,902 pin connections \u00b7 6,573 cell arcs \u00b7 observed output bits where available",
+    "ink": [
+      31722,
+      300
+    ],
+    "vivado90": "C90 \u00b7 821 net connections \u00b7 3,294 cell arcs \u00b7 observed output bits where available",
+    "clock90": "C90 \u00b7 674 pin connections \u00b7 3,284 cell arcs \u00b7 observed output bits where available",
+    "wirePick": "13.262 \u2192 14.822 ns \u00b7 12 switch-tile visits \u00b7 permuted LUT input \u00b7 predicted wire delay \u00b7 SDF 1.560 ns \u00b7 traced switch sum 1.324 ns \u00b7 $flatten\\decoder.$abc$510044$lut$aiger510043$49376/O5 \u2192 $flatten\\decoder.$auto$xilinx_dffopt.cc:341:execute$529415/A4",
+    "ram-stage": [
+      "RAM clock \u2192 capture D \u00b7 4.012 ns \u00b7 13 switch visits",
+      "Static bit-84 path \u00b7 C89 changed at RAM output.",
+      367,
+      200,
+      "RAM clock \u2192 capture D \u00b7 2.809 ns \u00b7 5 switch-tile visits \u00b7 1 site mux"
+    ],
+    "dsp-stage": [
+      "Capture clock \u2192 DSP operand \u00b7 5.308 ns \u00b7 39 switch visits",
+      "Static bit-84 path \u00b7 C90 changed at RAM output, capture Q, DSP operand.",
+      451,
+      221,
+      "Capture clock \u2192 DSP operand \u00b7 3.293 ns \u00b7 21 switch-tile visits"
+    ]
+  },
+  "checks": {
+    "final-browser": {
+      "seconds": 7.27,
+      "peakRSS": 1636712448
+    },
+    "old-two": {
+      "seconds": 7.22,
+      "peakRSS": 1665482752
+    },
+    "old-four": {
+      "seconds": 8.2,
+      "peakRSS": 1864122368
+    },
+    "four-mux/browser": {
+      "seconds": 9.24,
+      "peakRSS": 1865285632
+    },
+    "quality": {
+      "seconds": 71.39,
+      "peakRSS": 606240768
+    },
+    "wire/compare2": {
+      "seconds": 7.17,
+      "peakRSS": 669696000
+    },
+    "wire/route": {
+      "seconds": 68.66,
+      "peakRSS": 1783988224
+    },
+    "siblings": {
+      "seconds": 3.08,
+      "peakRSS": 111362048
+    },
+    "srl/srl16e/route": {
+      "seconds": 3.09,
+      "peakRSS": 1595572224
+    },
+    "srl/srlc32e/route": {
+      "seconds": 2.08,
+      "peakRSS": 1267089408
+    },
+    "srl/forced5/pack": {
+      "seconds": 1.05,
+      "peakRSS": 262144
+    },
+    "dsp/route": {
+      "seconds": 5.15,
+      "peakRSS": 1592541184
+    }
+  }
+}

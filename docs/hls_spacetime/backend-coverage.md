@@ -173,18 +173,22 @@ The shared 4,096-clock stimulus elicited 36 status frames and six corrections. E
 | --- | ---: | ---: |
 | Located primitives | 29,059 | 28,419 |
 | Timed data connections in the viewer | 108,835 | 100,758 |
-| Connections with unresolved physical spans | 7,533 | 0 |
-| Active connections / primitive arcs at C90 | 1,077 / 6,202 | 919 / 7,024 |
+| Connections with unresolved physical spans | 183 | 0 |
+| Active connections / primitive arcs at C90 | 821 / 3,294 | 674 / 3,284 |
 | RAM clock → capture D for state bit 84 | 2.809 ns | 4.012 ns |
 | Capture clock → executor DSP operand | 3.293 ns to A9 | 5.308 ns to A8 |
 
-Vivado traces 100,094 branches through switches and resolves 1,208 direct connections. One of the 108,836 data connections lacks a clock-launched arrival. openXC7 supplies routed wire delays for 53,469 branches and predicted delays for 47,289 permuted LUT inputs. Of its 113,931 nonclock SDF connections, 8,725 lack a modeled clock launch and 4,448 more lack an observed endpoint. The interactive drawing follows the traced switch tiles. Heights interpolate modeled arrival times and the activity filter uses settled primitive output changes.
+Vivado supplied a pin-to-pin interconnect delay for all 108,836 data connections. One lacks a clock-launched arrival. Of the 108,835 drawn, 100,094 have fabric switch tiles, 1,208 are direct and 7,350 pass through a selected site mux. The remaining 183 use dashed endpoint spans with their original delays. Applying the same check to the older four-worker Vivado gallery resolved 9,121 of its 9,861 dashed branches, leaving 740. On openXC7, 8,725 of 113,931 nonclock SDF connections lack a modeled launch and 4,448 more lack an observed endpoint. All 100,758 drawn branches have switch geometry and an SDF increment. Both panels interpolate height between endpoint times.
 
-Open `/workload.html?view=flow&cycle=90` in the paired gallery. In **Connections**, select **State RAM → capture D** or **Capture Q → DSP input** to isolate bit 84 in both panels. Vivado shows five then 21 switch-tile visits, collapsing consecutive switches in a tile. The first stage includes one unresolved 55 ps net span. openXC7 shows 13 then 39 switch visits. Both simulations matched all 4,085 known RTL RAM samples. At C89 only the RAM output changed among the three sampled pins. At C90 the RAM output, capture Q and DSP operand changed on both designs.
+Picking an openXC7 branch also reports the sum of nextpnr’s delay model along the traced switches. A read-only probe reproduced the original checkpoint, fixed routes and SDF byte for byte. The ordinary delay lookup reached the driver for 53,469 connections and equaled the independent sum on every one. For 47,289 permuted LUT inputs it used the placement predictor. The switch sum was lower on 28,905 branches, equal on 30 and higher on 18,354. The median absolute difference was 270 ps, spanning differences of −2,289 to +4,862 ps. SDF serialization rounded 473 lookup values down by 1 ps. Heights use the original SDF to preserve comparability with the tool report. [Timing, geometry and activity evidence](../../yap/hls_spacetime/g44-pin-coverage.json)
+
+The activity filter checks settled output bits on 2,547 Vivado and 2,232 openXC7 carry, RAM and DSP outputs, with primitive-level filtering on other rows. Every known bit change fell on the same cell’s known-change mask in the original 4,096-clock replay. At C90 the Vivado executor DSP changed P[32] while P[41] held zero. Under the former cell filter 1,077 Vivado and 919 openXC7 net branches lit up. Requiring the observed driver bit on covered branches reduces those counts to 821 and 674.
+
+Open `/workload.html?view=flow&cycle=90` in the paired gallery. In **Connections**, select **State RAM → capture D** or **Capture Q → DSP input** to isolate bit 84 in both panels. Vivado shows five then 21 switch-tile visits, collapsing consecutive switches in a tile. The first stage also traverses the selected CFFMUX.O6 site switch on its 55 ps capture span. openXC7 shows 13 then 39 switch visits. Both simulations matched all 4,085 known RTL RAM samples. At C89 only the RAM output changed among the three sampled pins. At C90 the RAM output, capture Q and DSP operand changed on both designs.
 
 ```sh
 base=../hls_artifacts/runs/spacetime-g4-parity-2026-11-24
-npm --prefix apps/hls_spacetime start -- --data "$PWD/$base/two-phi-paired/gallery" --port 49715
+npm --prefix apps/hls_spacetime start -- --data "$PWD/$base/two-phi-pin-coverage/gallery" --port 49715
 ```
 
 To rebuild, unpack `two-phi-routed/{capture,observations}.tar.gz` and `two-phi-paired/{vivado-reference,vivado-observations}.tar.gz` in a fresh directory. Use the pinned Java, RapidWright JAR, device data, chip database and Xilinx `constids.inc` from the witness. The paired input archive also records Vivado's synthesis inputs and Tcl. [Input identities and clock-by-clock checks](../../yap/hls_spacetime/g44-phi-routing.json)
@@ -218,18 +222,22 @@ The two-worker and original four-worker Vivado inventories contain the same prim
 | Changing address pins with a Vivado SDF arc to Q | 4 / 4 | 5 / 5 |
 | Vivado clock-to-Q delay, slowest reported value | 1,102 ps | 1,109 ps |
 
-The packed signal connections bind logical address bit 0 to physical A2 and the higher bits consecutively above it. The exported original-port labels retain the pre-rename indices. Native SDF omits the two highest changing address pins on each cell, clock-to-Q, and the data and enable setup/hold checks. It also lists an arc from the tied-high A1 pin. Spacetime excludes the generic LUT arcs on a storage cell. To close the gap, repair the pin origins, qualify address-to-Q separately from a clocked shift and check the data/enable timing at the active edge. The archive includes the raw SDFs, routed checkpoints and a reproducible replay. [Pin-level evidence](../../yap/hls_spacetime/g44-srl-taps.json)
+The original exporter retained pre-rename port labels. The packer overlay now moves the original pin name with the SRL address, data and output port. On fresh routes the live addresses bind to A2–A5 and A2–A6 respectively. Native SDF now lists all four and five address paths to Q at 124 ps each and drops the spurious A1 path. The value comes from a generic LUT model. Clock-to-Q and data/enable setup and hold are still absent, so timed flow continues to exclude these storage arcs. [Original SRL witness](../../yap/hls_spacetime/g44-srl-taps.json) · [Overlay results](../../yap/hls_spacetime/g44-pin-coverage.json)
+
+The 10 ns XC7Z030-1 DSP micro design retains a DSP48E1 with MREG and PREG enabled and both operand registers bypassed on each backend. The two mapped UNISIM replays agreed on 512 signed operand pairs and M-register products, and all 511 next-clock P captures. Vivado reports a maximum 383 ps CLK → P[47:0] and 42 setup/hold records. Its SDF exposes the external pins of the DSP. The internal M stage was observed in the functional model. The openXC7 routed SDF has an empty cell entry for this registered mode. [DSP witness](../../yap/hls_spacetime/g44-pin-coverage.json)
+
+To reproduce the named-output replay, restore the two-worker observation archives and overlay the functional netlists and VPI observers from the feature evidence archive (or rebuild the observer from `transitions.cpp` for the host). Run `pin_activity.py --help` next to `pair_two_phi.py` for the gallery, routed checkpoint, work directories and pinned model inputs. The evidence archive retains the switch-delay probe, the row-by-row comparison and the script that attaches its sums.
 
 ## Remaining work
 
 | Feature to qualify | Smallest existing witness and completion check |
 | --- | --- |
-| Variable-tap storage | Replay the two SRL fixtures above. Require every live tap-address arc, the clock launch and data/enable checks to bind to the correct packed pins before drawing timed flow. |
-| Registered DSP arithmetic | Use the archived micro design with MREG and PREG enabled. Follow one accepted operand across both clock boundaries and check the output cycle and timing arcs. |
+| Variable-tap storage | Supply a mode-specific address-to-Q model, clock launch and data/enable checks for the two dynamic-tap fixtures, then admit the qualified arcs into timed flow. |
+| Registered DSP arithmetic | Add native CLK-to-P and input timing checks for the witnessed MREG/PREG mode. Keep the internal register cycle explicit in the viewer. |
 | Block RAM write modes | The RAMB36E1 SDP72 READ_FIRST probe covers both output-register settings. Its WRITE_FIRST variant leaves 212 connected ports unqualified. When an application uses that mode, check same-address reads and writes and qualify its mode-specific timing. |
-| Activity on individual output pins | Toggle one output of a carry chain or multi-output RAM while a sibling output holds steady. Both viewers should highlight only branches sourced by the changing pin. The galleries currently filter on changes to any output of the cell. |
-| Routed delay at permuted LUT inputs | The paired two-worker capture contains 47,289 connections with traced switches and predicted wire delay. Exercise a permuted LUT on a small route and verify the delay lookup at the physical input before expanding to the capture. |
-| Site-internal and alternate-exit geometry | Apply the saved endpoint and switch evidence to the two-worker gallery first. Require an ordered path for each upgraded branch, including the 55 ps capture-mux span. |
+| Activity on other output ports | Extend the named-pin monitor when another multi-output primitive or port is exercised. |
+| Routed delay at permuted LUT inputs | Teach nextpnr’s delay lookup to resolve the bound permutation. Rebuild SDF and timing reports, then recheck every branch against the qualified switch sum before using the new arrivals. |
+| Site-internal and alternate-exit geometry | Resolve the remaining 183 two-worker and 740 four-worker spans using the saved physical endpoint and net exports. |
 
 1. **Distributed constant ties.** The 2,409 missing global-to-local constant branches are outside this visualization round. Their cut wires remain inspectable.
 2. **Multicorner timing and other hard modes.** The XC7 estimate includes predicted wiring and compiled slice FF clock parameters. A new corner, generated/gated clock relationship, DSP register, SRL tap or RAM configuration needs its own pin, clock and mode evidence. Use a workload that exercises the class, then compare native and vendor reports on matched parts and constraints. The four-Phi replay supplies RAM addresses, enables and read latency for one memory. Same-address read/write collisions were exercised in the smaller inferred-memory witness.
