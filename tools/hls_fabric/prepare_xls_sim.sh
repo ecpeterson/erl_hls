@@ -11,7 +11,6 @@ source tools/hls_fabric/backend_env.sh test
 bash "$project_root/tools/prepare_xls_sim.sh" "$stage"
 ERL_HLS_STAGE="$stage" erl -noshell -eval '
     Stage = os:getenv("ERL_HLS_STAGE"),
-        PhiHalo = xls_parse:to_xls("workloads/hls_phi/src/phi_halo_cell.erl"),
         PhiFieldTest = phi_field_dslx:to_dslx(),
         PhiPhenomTopology = phi_phenom_topology_dslx:to_dslx(),
         PhiTorusTopology = phi_torus_topology_dslx:to_dslx(),
@@ -152,7 +151,6 @@ ERL_HLS_STAGE="$stage" erl -noshell -eval '
             ok = filelib:ensure_dir(Path),
             ok = file:write_file(Path, Data)
         end, ProfileFiles),
-        ok = file:write_file(filename:join(Stage, "phi_halo_cell.x"), PhiHalo),
         ok = file:write_file(filename:join(Stage, "phi_field_test.x"), PhiFieldTest),
         ok = file:write_file(filename:join(Stage, "phi_phenom_topology.x"), PhiPhenomTopology),
         ok = file:write_file(filename:join(Stage, "phi_torus_topology.x"), PhiTorusTopology),

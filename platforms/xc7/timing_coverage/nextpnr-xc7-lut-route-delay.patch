@@ -1,0 +1,134 @@
+--- a/common/nextpnr.h
++++ b/common/nextpnr.h
+@@ -861,6 +861,8 @@
+
+     WireId getNetinfoSourceWire(const NetInfo *net_info) const;
+     WireId getNetinfoSinkWire(const NetInfo *net_info, const PortRef &sink) const;
++    // The timing endpoint can differ from the packed BEL pin after route legalisation.
++    WireId getNetinfoTimingSinkWire(const NetInfo *net, const PortRef &sink) const;
+     delay_t getNetinfoRouteDelay(const NetInfo *net_info, const PortRef &sink) const;
+
+     // provided by router1.cc
+--- a/common/nextpnr.cc
++++ b/common/nextpnr.cc
+@@ -296,6 +296,16 @@
+     return getBelPinWire(dst_bel, user_port);
+ }
+
++WireId Context::getNetinfoTimingSinkWire(const NetInfo *net, const PortRef &sink) const
++{
++    WireId nominal = getNetinfoSinkWire(net, sink);
++#ifdef ARCH_XILINX
++    return resolveLutTimingSink(net, sink, nominal);
++#else
++    return nominal;
++#endif
++}
++
+ delay_t Context::getNetinfoRouteDelay(const NetInfo *net_info, const PortRef &user_info) const
+ {
+ #ifdef ARCH_ECP5
+@@ -310,7 +320,7 @@
+     if (src_wire == WireId())
+         return 0;
+
+-    WireId dst_wire = getNetinfoSinkWire(net_info, user_info);
++    WireId dst_wire = getNetinfoTimingSinkWire(net_info, user_info);
+     WireId cursor = dst_wire;
+     delay_t delay = 0;
+
+--- a/common/timing.cc
++++ b/common/timing.cc
+@@ -1005,9 +1005,9 @@
+                          ctx->getDelayNS(total), net->name.c_str(ctx), ctx->getDelayNS(sink->budget), driver_loc.x,
+                          driver_loc.y, sink_loc.x, sink_loc.y);
+                 log_info("               Sink %s.%s\n", sink_cell->name.c_str(ctx), sink->port.c_str(ctx));
+-                if (ctx->verbose) {
++                auto sink_wire = ctx->verbose ? ctx->getNetinfoTimingSinkWire(net, *sink) : WireId();
++                if (sink_wire != WireId()) {
+                     auto driver_wire = ctx->getNetinfoSourceWire(net);
+-                    auto sink_wire = ctx->getNetinfoSinkWire(net, *sink);
+                     log_info("                 prediction: %f ns estimate: %f ns\n",
+                              ctx->getDelayNS(ctx->predictDelay(net, *sink)),
+                              ctx->getDelayNS(ctx->estimateDelay(driver_wire, sink_wire)));
+--- a/xilinx/arch.h
++++ b/xilinx/arch.h
+@@ -949,6 +949,8 @@
+     std::vector<std::pair<IdString, std::string>> getBelAttrs(BelId bel) const;
+
+     WireId getBelPinWire(BelId bel, IdString pin) const;
++    // Resolve a legalised XC7 physical LUT input to its unique net-owned router terminal.
++    WireId resolveLutTimingSink(const NetInfo *net, const PortRef &sink, WireId nominal) const;
+     PortType getBelPinType(BelId bel, IdString pin) const;
+     std::vector<IdString> getBelPins(BelId bel) const;
+
+--- a/xilinx/arch.cc
++++ b/xilinx/arch.cc
+@@ -185,6 +185,51 @@
+     else
+         ++br.e;
+     return br;
++}
++
++WireId Arch::resolveLutTimingSink(const NetInfo *net, const PortRef &sink, WireId nominal) const
++{
++    if (!xc7 || nominal == WireId() || sink.cell->type != id_SLICE_LUTX ||
++        !int_or_default(settings, id_route))
++        return nominal;
++
++    // fixupRouting() moves the packed port to the physical input, but retains the
++    // permutation PIP ending at the router's original input. Inspect at most six
++    // pins on this BEL. The site's other LUT half shares the same input wires.
++    auto bel = sink.cell->bel;
++    int z = getBelLocation(bel).z;
++    IdString pin = sink.cell->pins.count(sink.port) ? sink.cell->pins.at(sink.port) : sink.port;
++    if (pin.index < id_A1.index || pin.index > id_A6.index)
++        return nominal;
++    int physical = pin.index - id_A1.index;
++    int prefix = ((z >> 4) << 8) | (physical << 4);
++    auto direct = net->wires.find(nominal);
++    if (direct != net->wires.end()) {
++        PipId pip = direct->second.pip;
++        if (pip == PipId())
++            return nominal;
++        const auto &pd = locInfo(pip).pip_data[pip.index];
++        if (pd.flags != PIP_LUT_PERMUTATION || (pip.tile == bel.tile && pd.extra_data == (prefix | physical)))
++            return nominal;
++        // The same net may also feed a sibling input: ownership alone does not identify the tap.
++    }
++    WireId matched;
++    for (int i = 0; i < 6; ++i) {
++        WireId wire = getBelPinWire(bel, IdString(id_A1.index + i));
++        auto binding = net->wires.find(wire);
++        if (binding == net->wires.end())
++            continue;
++        PipId pip = binding->second.pip;
++        if (pip == PipId() || pip.tile != bel.tile)
++            continue;
++        const auto &pd = locInfo(pip).pip_data[pip.index];
++        if (pd.flags != PIP_LUT_PERMUTATION || pd.extra_data != (prefix | i))
++            continue;
++        if (matched != WireId())
++            return WireId();
++        matched = wire;
++    }
++    return matched;
+ }
+
+ WireId Arch::getBelPinWire(BelId bel, IdString pin) const
+@@ -2156,6 +2201,7 @@
+     // exited 255; as a post-router fill it only consumes leftover resources.
+     routeVcc();
+     fixupRouting();
++    settings[id_route] = 1;
+     // router1 runs its own final timing analysis; the router2 flow
+     // historically ended without one, so the last "Max frequency" lines the
+     // user saw were the placer's pre-route ESTIMATES (printed mid-flow by
+@@ -2165,7 +2211,6 @@
+     if (router == "router2")
+         timing_analysis(getCtx(), true /* slack_histogram */, true /* print_fmax */, true /* print_path */,
+                         false /* warn_on_failure */);
+-    getCtx()->settings[getCtx()->id("route")] = 1;
+     archInfoToAttributes();
+     return result;
+ }

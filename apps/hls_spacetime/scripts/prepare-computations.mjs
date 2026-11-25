@@ -789,7 +789,8 @@ export async function publish(out, attachment, viewIdentity) {
   const parts = [],
     totals = {};
   let total = 0;
-  for (const name of TABLES) {
+  const tables = attachment.routeNets ? [...TABLES, "routeNets"] : TABLES;
+  for (const name of tables) {
     const rows = attachment[name];
     totals[name] = rows.length;
     let items = [],
@@ -825,7 +826,7 @@ export async function publish(out, attachment, viewIdentity) {
     await flush();
   }
   const scalar = Object.fromEntries(
-    Object.entries(attachment).filter(([k]) => !TABLES.includes(k)),
+    Object.entries(attachment).filter(([k]) => !tables.includes(k)),
   );
   const result = {
     format: "spacetime-computations-manifest",

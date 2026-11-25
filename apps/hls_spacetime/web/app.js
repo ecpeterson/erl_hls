@@ -22,6 +22,8 @@ import {
 import { eventFootprint, accessConnections } from "./footprint.js";
 import { nativePaths } from "./native-paths.js";
 import { nativeRoutes } from "./native-routes.js";
+import { openxc7Routing, showOpenxc7Routes } from "./openxc7-routes.js";
+import { createIntervalInspector } from "./interval-inspector.js";
 import { loadComputations, publicationUrl } from "./computation-loader.js";
 import { loadRecording } from "./recording-loader.js";
 import { loadPreparedRenderWorker } from "./prepared-loader.js";
@@ -138,6 +140,7 @@ const sinkInspector = createSinkInspector(() => {
   $("pick-notice").textContent = "";
   repaint();
 });
+const intervalInspector = createIntervalInspector(() => repaint());
 const sceneSelection = createSceneSelection({
   onChoose(target) {
     if (target.kind === "sink") {
@@ -212,6 +215,11 @@ async function loadDocument(
   sceneSelection.reset();
   regionalControls.configure();
   scenarioControls.configure();
+  if (!computationData && model.document.openxc7Computations)
+    computationData = {
+      attachment: model.document.openxc7Computations,
+      routeNets: model.document.openxc7Routes?.nets ?? [],
+    };
   const computations = computationData?.prepared
     ? createPreparedComputations(model, computationData.prepared)
     : createComputations(
@@ -220,6 +228,23 @@ async function loadDocument(
         computationData?.routeNets,
       );
   const paths = nativePaths(model);
+  showOpenxc7Routes(
+    $("openxc7-routing"),
+    openxc7Routing(model, model.document.openxc7Routes),
+  );
+  const nativeTiming =
+    model.document.openxc7Timing ??
+    model.document.openxc7Computations?.timingModel;
+  const modelNote = $("openxc7-timing-model");
+  modelNote.hidden = !nativeTiming;
+  if (nativeTiming) {
+    const predicted =
+      nativeTiming.predicted ??
+      model.document.openxc7Computations.arcs.filter(
+        (a) => a.timing.basis === "predicted",
+      ).length;
+    modelNote.textContent = `nextpnr structural timing · ${predicted} predicted net delays · ${nativeTiming.unresolved_delays} unavailable delay queries. Slice flip-flops use compiled clock constants.${nativeTiming.bram_model_sha256 ? " RAM timing is qualified by primitive configuration." : ""}${nativeTiming.registered_dsp_model_sha256 ? " With both stages enabled, the qualified multiplier transfers MREG to PREG on the following edge." : ""}${nativeTiming.fixed_srl_model_sha256 ? " Fixed-tap SRL timing is qualified by the packed address and clock polarity." : ""}${nativeTiming.carry_di_model ? " Carry DI arcs use placed-site variant maxima." : ""} Per-entry database characterization is unverified.`;
+  }
   const routes = nativeRoutes(model);
   const routeIndex = new Map(
     routes.map((route) => [`${route.pathId}/${route.arcIndex}`, route]),
@@ -310,7 +335,9 @@ async function loadDocument(
   for (const path of state.nativePaths)
     $("native-path").add(
       new Option(
-        `${path.id} · ${path.dataDelayNs} ns data · ${path.logicLevels} levels`,
+        path.rank
+          ? `#${path.rank} · ${path.slackNs} ns slack · ${path.endpoint}`
+          : `${path.id} · ${path.dataDelayNs} ns data · ${path.logicLevels} levels`,
         path.id,
       ),
     );
@@ -1039,7 +1066,8 @@ function circuitPaint(layer) {
       return p;
     });
     if (!route.nodes.length) {
-      segment(`unresolved/${a}`, from, to, roles, "unresolved");
+      if (!index.attachment.timingModel)
+        segment(`unresolved/${a}`, from, to, roles, "unresolved");
       continue;
     }
     const ends = [from, ...switches, to];
@@ -1184,6 +1212,9 @@ function renderCircuitSummary(layers) {
       : "";
   node.textContent =
     `${writes.toLocaleString()} recorded writes · ${arcs.toLocaleString()} native arcs summed across ${layers.length} clocks · ${pips.toLocaleString()} PIP locations summed across clocks · ${unknown.toLocaleString()} unmapped target-bit occurrences · ${untimed} displayed cones with unknown timing${launchSummary} · ${filtered} filtered write-cone occurrences. ` +
+    (intervalInspector.available
+      ? "Embedded route coverage across the displayed clocks totals "
+      : "") +
     Object.entries(dispositions)
       .map(([key, value]) => `${value.toLocaleString()} ${key} net arcs`)
       .join(" · ") +
@@ -1219,7 +1250,8 @@ function drawNativePath(ctx, project, flat = false, labels = null) {
       continue;
     }
     if (!route?.nodes.length) {
-      line(ctx, from, to, "#d7ab77", 1.5, true);
+      if (!state.model.document.openxc7Routes)
+        line(ctx, from, to, "#d7ab77", 1.5, true);
       continue;
     }
     // A node's wires form an unordered electrical union. Do not sort them into
@@ -1455,6 +1487,7 @@ function storagePoints(segment) {
  * from recorded use. Per-arc rows disclose gaps instead of drawing fanout trees. */
 function renderNativePath() {
   const path = state.nativePath;
+  const ranking = state.model?.document.nativePaths?.ranking;
   const routes = path
     ? path.arcs.flatMap((arc, i) => {
         const route = state.nativeRoutes.get(`${path.id}/${i}`);
@@ -1468,13 +1501,16 @@ function renderNativePath() {
     (route) => route.disposition === "partial",
   ).length;
   $("native-path-summary").textContent = path
-    ? `${path.dataDelayNs} ns data = ${path.logicDelayNs} logic + ${path.routeDelayNs} route; slack ${path.slackNs} ns. Static STA path; activity at this clock unknown. ` +
+    ? `${path.dataDelayNs} ns data = ${path.logicDelayNs} logic + ${path.routeDelayNs} route; slack ${path.slackNs} ns.${path.requiredNs !== undefined ? ` Required ${path.requiredNs} ns, capture setup ${path.setupNs} ns.` : ""} Static STA path; activity at this clock unknown. ` +
       (routes.length
         ? `${resolved} resolved + ${partial} partial of ${path.arcs.filter((arc) => arc.kind === "net").length} net arcs have branch geometry; partial endpoints retain unknown alternatives. Violet marks native wire tiles; gold marks routing switches. Dotted spans show node connectivity or missing site geometry, not exact metal bends.`
         : "No routing geometry supplied; dotted segments join placed cells only.")
     : state.nativePaths.length
       ? "Select a saved static path to inspect its ordered combinational logic and routing, independently of this clock's execution."
       : "Native timing-path detail is unavailable for this capture.";
+  if (ranking)
+    $("native-path-summary").textContent +=
+      ` Ranked ${ranking.retained} of ${ranking.eligible.toLocaleString()} eligible capture pins by setup slack.`;
   $("native-path-steps").innerHTML = path
     ? `<p>${esc(path.source)} → ${esc(path.endpoint)}</p><ol>${path.steps
         .map((step, i) => {
@@ -1701,6 +1737,7 @@ function buildStackScene() {
     enabled: arrival,
     scope: metric === "registered_launch" ? "registered" : "static",
   });
+  intervalInspector.update(sinkInspector);
   const explorer = sinkInspector.explorer;
   regionalControls.update(state.computations, explorer.neighborhood);
   scenarioControls.update(state.computations, explorer.cut);
@@ -2389,6 +2426,23 @@ function drawFlat() {
         );
       }
     }
+    const path = model.document.hardwarePath;
+    if (path?.events.includes(state.selected)) {
+      ctx.save();
+      ctx.strokeStyle = "#91b8d1";
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      path.steps.forEach((step, i) => {
+        chosen.add(step.cell);
+        const cell = model.cells.get(step.cell);
+        const x = ox + (cell.x - b.minX) * scale;
+        const y = h - oy - (cell.y - b.minY) * scale;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+      ctx.restore();
+    }
     for (const cell of model.cells.values()) {
       if (!Number.isFinite(cell.x) || !Number.isFinite(cell.y)) continue;
       const p = {
@@ -2652,7 +2706,7 @@ function inspectClockPath(row) {
   state.autoFit = true;
   render();
   notice(
-    `Showing an SDF maximizing path to the exact STA-limiting sink at its recorded write C${match.event.cycle}${match.withinStep ? " inside this step" : " outside this step"}. This chain may differ from the native STA path; its activity in this step is not established.`,
+    `Showing a ${state.model.document.openxc7Timing || state.model.document.openxc7Computations ? "nextpnr" : "SDF"} maximizing path to the exact STA-limiting sink at its recorded write C${match.event.cycle}${match.withinStep ? " inside this step" : " outside this step"}. This chain may differ from the native STA path; its activity in this step is not established.`,
   );
 }
 
@@ -2772,8 +2826,17 @@ function renderInspector() {
     e = d.event;
   $("selected-kind").textContent = `C${e.cycle}`;
   const lifetimes = selectedLifetimes();
+  const path = state.model.document.hardwarePath;
+  const physicalPath = path?.events.includes(e.id)
+    ? `<details open><summary>Hardware path · ${esc(path.basis)}</summary><p>${esc(path.description)} Dashed lines on the flat chip connect the sites schematically.</p><ol>${path.steps
+        .map((step) => {
+          const cell = state.model.cells.get(step.cell);
+          return `<li><details><summary>${esc(cell.site)} · ${esc(cell.kind)} · ${[step.input, step.output].filter(Boolean).map(esc).join(" → ")}</summary><button type="button" data-cell="${esc(cell.id)}">${esc(cell.id)}</button>${step.net ? `<p>Input net · ${esc(step.net)}</p>` : ""}</details></li>`;
+        })
+        .join("")}</ol></details>`
+    : "";
   $("selection").innerHTML =
-    `<h3>${esc(e.operation)}</h3><span class="pill">${esc(e.actor)}</span> <span class="pill unknown">${esc(d.placement.status.replaceAll("_", " "))}</span><dl><dt>Event</dt><dd>${esc(e.id)}</dd><dt>Task</dt><dd>${esc(e.task)}</dd><dt>Activation</dt><dd>${esc(e.activation)}</dd><dt>Incarnation</dt><dd>${esc(e.incarnation)}</dd><dt>Input versions</dt><dd>${d.inputs.map((v) => `${esc(v.id)} (${esc(v.origin)})`).join(", ") || "None recorded"}</dd><dt>Output versions</dt><dd>${d.outputs.map((v) => esc(v.id)).join(", ") || "None recorded"}</dd>${e.access ? `<dt>Storage</dt><dd>${esc(e.access.resource)} [${e.access.address}] · ${esc(e.access.kind)}</dd>${e.access.mask ? `<dt>Write mask</dt><dd>${esc(e.access.mask)}</dd>` : ""}${e.access.read_mask ? `<dt>Selected read bits</dt><dd>${esc(e.access.read_mask)}</dd>` : ""}` : ""}</dl><p class="evidence-note">${esc(e.evidence)}</p>${d.inputs
+    `<h3>${esc(e.operation)}</h3><span class="pill">${esc(e.actor)}</span> <span class="pill unknown">${esc(d.placement.status.replaceAll("_", " "))}</span><dl><dt>Event</dt><dd>${esc(e.id)}</dd><dt>Task</dt><dd>${esc(e.task)}</dd><dt>Activation</dt><dd>${esc(e.activation)}</dd><dt>Incarnation</dt><dd>${esc(e.incarnation)}</dd><dt>Input versions</dt><dd>${d.inputs.map((v) => `${esc(v.id)} (${esc(v.origin)})`).join(", ") || "None recorded"}</dd><dt>Output versions</dt><dd>${d.outputs.map((v) => esc(v.id)).join(", ") || "None recorded"}</dd>${e.access ? `<dt>Storage</dt><dd>${esc(e.access.resource)} [${e.access.address}] · ${esc(e.access.kind)}</dd>${e.access.mask ? `<dt>Write mask</dt><dd>${esc(e.access.mask)}</dd>` : ""}${e.access.read_mask ? `<dt>Selected read bits</dt><dd>${esc(e.access.read_mask)}</dd>` : ""}` : ""}</dl><p class="evidence-note">${esc(e.evidence)}</p>${physicalPath}${d.inputs
       .filter((v) => v.producer === "root")
       .map(
         (v) =>
@@ -2861,7 +2924,7 @@ function renderResource() {
   $("expand-storage").disabled =
     (!state.resource && !state.chain) || !state.model.catalogue;
   $("flat-subtitle").textContent = cells.length
-    ? `${cells.length} associated native storage cells highlighted`
+    ? `${cells.length} associated native cells highlighted`
     : "Unique installed cells, counted once";
   $("cell-count").textContent = `(${cells.length})`;
   $("cells").innerHTML =
@@ -2869,7 +2932,7 @@ function renderResource() {
       .slice(0, 600)
       .map(
         (c) =>
-          `<div class="cell-row" role="button" tabindex="0" data-cell="${esc(c.id)}">${esc(c.id)}<span>${esc(c.kind)} · ${esc(c.site)} / ${esc(c.bel)} · tile (${c.x}, ${c.y})</span></div>`,
+          `<div class="cell-row" role="button" tabindex="0" data-cell="${esc(c.id)}">${esc(c.id)}<span>${esc(c.kind)} · ${esc(c.site ?? c.tile)} / ${esc(c.bel ?? "BEL unavailable")} · tile (${c.x}, ${c.y})</span></div>`,
       )
       .join("") +
     (cells.length > 600
@@ -3125,6 +3188,7 @@ function bindControls() {
     };
     const sequence = ++state.loadSequence;
     stepComparison.reset();
+    intervalInspector.reset();
     regionalControls.configure();
     scenarioControls.configure();
     state.loadController?.abort();
@@ -3242,6 +3306,18 @@ function bindControls() {
           : await loadComputations(options);
         if (sequence !== state.loadSequence) return;
         installComputationData(data);
+        if (expected.geometry) {
+          await intervalInspector.configure(
+            {
+              entry: expected,
+              baseUrl: options.baseUrl,
+              model: state.model,
+              signal,
+            },
+            state.computations,
+          );
+          if (sequence !== state.loadSequence) return;
+        }
         await new Promise((resolve) =>
           requestAnimationFrame(() => requestAnimationFrame(resolve)),
         );
@@ -3267,6 +3343,7 @@ function bindControls() {
     sceneSelection.reset();
     const sequence = ++state.loadSequence;
     stepComparison.reset();
+    intervalInspector.reset();
     regionalControls.configure();
     scenarioControls.configure();
     state.loadController?.abort();
@@ -3503,7 +3580,7 @@ function bindControls() {
     if (hit) {
       state.cell = hit.cell.id;
       notice(
-        `${hit.cell.kind} · ${hit.cell.id} · ${hit.cell.site}/${hit.cell.bel}`,
+        `${hit.cell.kind} · ${hit.cell.id} · ${hit.cell.site ?? hit.cell.tile}/${hit.cell.bel ?? "BEL unavailable"}`,
       );
       $("cell-details").open = true;
       repaint();
@@ -3628,6 +3705,26 @@ async function initialize() {
     const response = await fetch("data/index.json");
     if (!response.ok) return;
     const index = await response.json();
+    const query = new URLSearchParams(location.search);
+    if (index.workload === "two-phi") {
+      if (!query.has("view")) query.set("view", "flow");
+      location.replace("workload.html?" + query + location.hash);
+      return;
+    }
+    if (
+      index.workload === "four-phi" &&
+      index.flow === 1 &&
+      query.get("detail") === "1"
+    ) {
+      query.delete("detail");
+      query.set("view", "flow");
+      location.replace("workload.html?" + query + location.hash);
+      return;
+    }
+    if (index.workload === "four-phi" && !query.has("detail")) {
+      location.replace("workload.html" + location.search + location.hash);
+      return;
+    }
     const entries = Array.isArray(index)
       ? index
       : (index.captures ?? index.examples ?? index.files ?? []);

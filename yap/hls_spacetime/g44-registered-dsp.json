@@ -1,0 +1,92 @@
+{
+  "scope": "Simulation witness and a single-corner native model calibrated to the routed Vivado SDF for a direct DSP48E1 multiply with MREG and PREG enabled. Unused ALU, cascade, C and D paths are outside the calibration.",
+  "archive": "runs/spacetime-g4-parity-2026-11-24/registered-dsp",
+  "evidenceTarSha256": "60f795c9a509789ad5dd68ddcd5ad43f21645ce76b27381807f439e034e5c098",
+  "inventorySha256": "08b5bc42b9fb0674d9b738c12111e852e7fc4429cca71b13485180ef2af84e24",
+  "build": "68aeeb39f92e39bfb239c7e4a44dd93451fc1889",
+  "timingModelSha256": "bd823ca91c875ee5046d0fa330a87a255ab9353e3e7d9c37b55fb8fa6126dfad",
+  "matchedPinValues": "setup then signed hold in ps; both data edges against rising CLK",
+  "part": "xc7z030sbg485-1",
+  "periodNs": 10,
+  "seed": 1,
+  "instance": "$mul$micro.v:29$26",
+  "bel": "DSP48_X0Y38/DSP48E1",
+  "vivadoInstance": "pipeline_output_reg",
+  "rtlSha256": "e704229c757bdd6788dd2cd4160836aec517974305d368f0f5868fca3144fc6f",
+  "synthesisSha256": "2dfd1363031ac2fa02fa783eae9b6c4d7e501ee4801cfd4ae36d1b4d72ac60d7",
+  "vivadoSdfSha256": "7ab7864cd8e48077acaf65267e1163e6de7258481abc6756b452a46223881b58",
+  "nativeSdfSha256": "1a292dfe00a1b13fc79a5c0086c553006092b18c438b7afd789b14852a0998d8",
+  "checkpointSha256": "99b063f3fed7c1405a97561bb189358231e3b9f371bb9713e3517afe9acb2fa8",
+  "observerSha256": "90b2dd1aab8d5049b733aff628d6d5484f44929675f621258bd844f098785cf2",
+  "routerSha256": "95705efaa89d4b3341a3004c1a0873e2a83604475b196ab296d1dccea06c1f33",
+  "route": {
+    "iteration": 3,
+    "usedWires": 6326,
+    "fixedPips": 7347,
+    "fixedNets": 488
+  },
+  "launchPs": 383.0,
+  "sdfLaunchPins": 48,
+  "connectedProductBits": 43,
+  "timedDataConnectionsIntoDsp": 48,
+  "timedConnectionsFromP": 44,
+  "setupHoldPins": 52,
+  "setupHoldRecords": 104,
+  "vivadoSetupHoldRecords": 42,
+  "setupHoldPs": {
+    "A0": [
+      1634.0,
+      -250.0
+    ],
+    "B0": [
+      1477.0,
+      -182.0
+    ],
+    "CEM": [
+      324.0,
+      191.0
+    ],
+    "CEP": [
+      444.0,
+      4.0
+    ],
+    "RSTM": [
+      229.0,
+      232.0
+    ],
+    "RSTP": [
+      294.0,
+      10.0
+    ]
+  },
+  "checkedRankedCapturePins": [
+    "A29",
+    "A28",
+    "A26",
+    "A27",
+    "A15",
+    "A24",
+    "A25",
+    "A17",
+    "B15",
+    "A18",
+    "B16"
+  ],
+  "unqualifiedControls": {
+    "opmode": 182,
+    "preg-only": 182,
+    "clock": 182
+  },
+  "matchedSignedProducts": 512,
+  "matchedFollowingCaptures": 511,
+  "fourWorker": {
+    "nativeBypassed": 48,
+    "vivadoPregOnly": 18,
+    "vivadoBypassed": 22,
+    "instance": "decoder/application/__phi_decoder_profile_topology__SchedulerGrid_0_next_inst/__phi_halo_cell__SharedService_0__2_2_2_2_next_inst/__phi_halo_cell__SharedExecutor_0_next_inst/p0_bit_slice_80068_reg",
+    "site": "DSP48_X1Y14",
+    "timedPBits": 25,
+    "clockToPPs": 383,
+    "firstObservedCellChange": 9
+  }
+}

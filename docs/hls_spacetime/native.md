@@ -1,5 +1,78 @@
 # Native catalogue import
 
+## openXC7 placement
+
+For a self-contained Verilog or SystemVerilog module named `top`, the target capture tool runs Yosys and nextpnr-xilinx from an Apio installation. Supply the matching little-endian Project X-Ray v1 chip database. The example uses the compile-only Z-7030 pin constraints. Run from the umbrella root with a fresh output directory and the project’s outer process guard.
+
+```sh
+python3 apps/hls_target/priv/tools/export_openxc7.py \
+  --apio-home "$ERL_HLS_APIO_HOME" --chipdb "$CHIPDB" \
+  --rtl apps/hls_spacetime/test/native/openxc7/placement.v \
+  --xdc platforms/xc7/xc7z030sbg485.xdc \
+  --source-id g4-placement-v1 --observation-id placement-only \
+  --max-cells 32 --max-bytes 1048576 capture
+rebar3 as spacetime escriptize
+_build/spacetime/bin/spacetime import-openxc7 capture capture/identity.term catalogue
+```
+
+The raw implementation manifest identifies the exact part (device, package and speed grade), chip database, Apio builds, launcher and executable hashes, the Series-7 BRAM mapping file hash, synthesis command and router arguments. It inventories the original RTL, constraints, synthesis JSON, post-route JSON and chipdb location table. The ceiling covers their **combined uncompressed bytes**. Raw and stored sizes coincide. Captures start with an incomplete manifest and retain partial files and tool logs on failure. The defaults are 100,000 packed cells and 64 MiB of sidecars. A bounded application capture can request up to 384 MiB. Console logs are diagnostics outside the evidence inventory.
+
+The example’s `identity.term` is a receipt. When joining an independent trace, use its expected build identity. The RTL component is the SHA-256 of the Verilog input, the implementation component is the SHA-256 of the exact complete manifest, and the checkpoint is the SHA-256 of `routed.json`. The caller identifies the original source and observation. The offline importer checks the file hashes, native route-complete marker, cell count, used location inventory and unresolved count. It preserves the complete native `NEXTPNR_BEL` attribute, including nested I/O BEL names. Tile-owned BELs have a null site and a known tile. Missing BELs are unplaced; unresolved BELs retain their spelling and have unknown coordinates. Placement supplies no timing or resource bindings.
+
+The opt-in EUnit placement witness reads `OPENXC7_PLACEMENT_FIXTURE` and `OPENXC7_TILEGRID` (absolute paths to the example capture and the device’s independent Project X-Ray `tilegrid.json`). Run `bash tools/test_umbrella_eunit.sh spacetime` with both variables set to check every packed primitive and its native BEL and grid coordinates. The normal suite exercises missing, unplaced and tile-owned BELs, digest substitution and cross-implementation joins offline.
+
+## openXC7 routes and computation timing
+
+Add `--route-net NAME` for each net or alias to inspect, or `--route-all` to capture every packed net under the same explicit byte and route-object limits. Both the exporter and offline reader check a whole-design selection against the net names in the routed JSON. The inventory includes nets with unresolved endpoints. Stock nextpnr exports each selected packed port, BEL pin and bound wire. The exporter joins these to directed fixed-route PIPs using their native tile and wire indices. In the viewer, select the net and sink under **openXC7 routes** to inspect its ordered switches and tile footprints. Missing endpoints and ambiguous branches have a disposition and a gap. The tile marks locate the resources at chipdb resolution.
+
+For timed cones, build the pinned timing observer once, then add `--timing-tools "$TIMING_TOOLS"` at capture. The optional final argument to the build script is a local cache containing the verified nextpnr and Eigen source archives. For a package-overlay chipdb, supply `--chipdb-manifest PATH` to record its stamped package, reference part and database hashes.
+
+```sh
+bash platforms/xc7/timing_coverage/build_spacetime.sh "$TIMING_TOOLS" "$ARCHIVE_CACHE"
+```
+
+The observer retains original port identities through LUT fracturing and input permutation, plus nextpnr cell arcs, per-sink delays, sequential timing roles and clocks. Its model supplies one structural estimate in picoseconds. The viewer preserves routed, predicted and unavailable delay queries. Slice flip-flop setup, hold and clock-to-Q use compiled constants. Characterization of individual database entries remains unverified. A recording supplies no measured board period.
+
+Supply repeated `--rtl FILE` options in synthesis order for a multi-file top. The generated source index binds each staged file by digest. Yosys must report exactly those application inputs outside its technology library. Use `--flatten` for a flattened top. A timing observer can take `--focus-bit NET[BIT]` and `--focus-word NET` to retain the matching FDRE roots and their combinational fan-in. The scoped maximum is 650,000 timing objects. The route graph has its own 100,000-object limit. `--sta --route-sta` captures the ordered setup checks and requests their nets. Add `--sta-endpoints N` (1–100) for one worst native path per distinct capture pin, ordered by setup slack with cell and pin names breaking ties. The ranking admits single-clock, same-edge, single-cycle setup checks and records the total eligible population. Omitting the option preserves the native clock-pair report. Pair a later `--route-net` request with `--route-checkpoint SHA256` to check the routed bytes before publishing. The [N2 comparison](backend-coverage.md) exercises these options and builds both prepared viewer indexes.
+
+Use `--storage-word RESOURCE=RTL_NET` to nominate an LSB-first synthesis net for a semantic word in the trace. Qualification checks the original FDRE configuration and its packed D, Q, rising clock, enable, synchronous reset, initial value and actual BEL-pin connectivity. Other configurations or incomplete origins retain unknown bits. To join the resulting evidence, use the trace’s expected implementation and the saved checkpoint digest.
+
+```sh
+_build/spacetime/bin/spacetime join-openxc7 trace/bundle.etf capture "$ROUTED_SHA256" joined
+node apps/hls_spacetime/scripts/prepare-view.mjs --bundle joined/bundle.json --openxc7 capture --output view
+npm --prefix apps/hls_spacetime start -- --data "$PWD/view"
+```
+
+### Publish interval geometry from a frozen openXC7 capture
+
+Use a complete timed capture containing numeric fixed routes, its matching chipdb and the pinned observer’s `xilinx/constids.inc`. The joined recording must identify the cycle interval in its selection metadata. From the umbrella root, choose fresh output directories and run under the project resource guard. The all-word N2 capture driver also runs this preparation.
+
+```sh
+scripts=apps/hls_spacetime/scripts
+node "$scripts/prepare-view.mjs" --bundle joined/bundle.json --metadata metadata.json \
+  --openxc7 native --openxc7-chipdb "$CHIPDB" --output view
+node "$scripts/prepare-render.mjs" --input view --output prepared \
+  --openxc7 native --chipdb "$CHIPDB" --constids "$CONSTIDS"
+npm --prefix apps/hls_spacetime start -- --data "$PWD/prepared"
+```
+
+The first step can qualify selected LUT endpoints in a previously exported route graph. The second step binds the interval geometry to the exact recording, computation source, render derivative, checkpoint and chipdb. It reconciles every demanded net’s incoming PIPs before publishing shared node, switch and branch tables. Fixed-route capture requires at most two million PIP rows, one million demanded branches and sixteen million PIP membership references for this derivative. Each part contains at most 1,024 rows and 1 MiB of decoded JSON. A failed preparation leaves the output without a served index.
+
+Select a sink in the arrival view to load its representative path. Click a net arc in the ordered path to inspect its wire footprint and switches. Under **Interval routing geometry**, enter a full sink pin or net arc ID to inspect another branch. An empty lookup returns to the selected path. The viewer verifies part hashes before applying a selection, with a 16 MiB cache budget and a 32 MiB per-inspection budget measured in decoded JSON bytes. The four-bit and Vivado publications also work without this attachment.
+
+Add `--region-bin-size 16` to the render command for the regional map. The publisher reconciles every named net and fixed switch against the matching device database and counts each constituent tile wire in its region. This works with a selected-route capture because the frozen checkpoint retains the whole-device routing inventory. Both the region and interval attachments verify their own bounds and recording identity.
+
+Run the three serial, compile-only witnesses from the umbrella root under the local process guard. `TILEGRID` is the device’s Project X-Ray `tilegrid.json`. Set `OPENXC7_CHIPDB_MANIFEST` to include the package-overlay check. The script uses fresh output directories and requires Icarus Verilog from the Apio suite.
+
+```sh
+bash apps/hls_spacetime/test/native/openxc7/run_witness.sh \
+  "$ERL_HLS_APIO_HOME" "$CHIPDB" "$TILEGRID" "$TIMING_TOOLS" fresh-witness
+```
+
+The fixtures check native placements, both branches of an aliased net including site PIPs, and two fractured LUT outputs feeding enabled/reset registers. An eight-edge finite replay checks both stored bits against independent expectations. The timing check compares the observer with nextpnr’s own SDF writer on the same routed result, allowing 1 ps for writer rounding. The viewer consumes the native estimates directly. Removing a PIP endpoint, a storage binding or a cell arc exercises the corresponding gap.
+
+## Vivado checkpoint and SDF
+
 The target-owned `apps/hls_target/priv/tools/export_spacetime.tcl` reads an existing checkpoint and copies previously verified whole-design STA SDF files from that exact checkpoint. It does not synthesize, place or route. Use a fresh output directory and an outer process/memory guard; the exporter enforces its 600-second, two-million-table-row and 256-MiB decoded ceilings where control returns to Tcl. Completed stages retain closed tables and progress metadata, but only the final complete manifest authorizes import. A failed prefix is diagnostic evidence, not a physical catalogue.
 
 The call is `::hls_spacetime_export::run CHECKPOINT OUTPUT BUILD LIMITS TIMING_INPUTS`. `BUILD` contains `source`, `rtl`, `observation` and realized-`implementation` digests; `LIMITS` may tighten the ceilings. `TIMING_INPUTS` contains `checkpoint_sha`, `mode sta`, up to nine `sample_nets`, and `fast`/`slow` dictionaries with `path` and `sha256`. Each SDF input and its copied output must match the supplied digest.

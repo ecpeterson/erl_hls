@@ -624,7 +624,7 @@ def build(source: Path | str, xls_root: Path | str, output: Path | str, *,
           codegen_flags: Sequence[str] | Callable[[Path], Sequence[str]] | None = None,
           optimizer_pipeline: Path | str | None = None,
           finalize: Callable[[Path, dict[str, Any]], dict[str, Any]] | None = None) -> Path:
-    """Adapt a prepared flat DSLX stage to the shared executor and familiar release layout.
+    """Compile sibling DSLX modules and their <module>_helpers imports into one frozen release.
 
     Without codegen_flags this adapter retains its input-flops-disabled,
     output-flops-enabled schedule. Literal flags (or a callback reading snapshot
@@ -657,6 +657,11 @@ def build(source: Path | str, xls_root: Path | str, output: Path | str, *,
     if not (stdlib / "std.x").is_file():
         raise ValueError(f"missing XLS standard library: {stdlib}")
     sources = {path.name: path for path in sorted(source.parent.glob("*.x"))}
+    # Actor lowering puts companion modules in a sibling <module>_helpers namespace.
+    for module in list(sources.values()):
+        helpers = module.with_name(module.stem + "_helpers")
+        if helpers.is_dir():
+            sources.update(tree_files(helpers, helpers.name))
     if source.name not in sources:
         raise ValueError(f"missing DSLX source: {source}")
     stdlib_files = tree_files(stdlib, "_stdlib")

@@ -109,6 +109,19 @@ class ProfileBuilds(BuildFixture):
         self.assertEqual(self.statuses(self.inputs / 'compiled'),
                          dict(ir=True, opt=True, codegen=True))
 
+    def test_namespaced_actor_helper(self) -> None:
+        """Publish the bound helper at its import path and detect a subsequent helper-only change."""
+        rel = "actor_helpers/direction.x"
+        helper = self.inputs / rel
+        helper.parent.mkdir()
+        helper.write_text("pub const NORTH = u32:1;\n")
+        self.input_manifest["inputs"][rel] = compiler.sha(helper)
+        self.manifest_path.write_text(json.dumps(self.input_manifest))
+        release = self.publish()
+        self.assertEqual((release / "sources" / rel).read_bytes(), helper.read_bytes())
+        helper.write_text("pub const NORTH = u32:2;\n")
+        self.reject(release)
+
     def test_regenerated_actor_retains_recipe_identity_and_invalidates_cache(self) -> None:
         """Rebinding changed actor bytes changes compilation, not the RAM recipe identity."""
         original = self.publish()

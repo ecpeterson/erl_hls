@@ -13,6 +13,8 @@ import {
 } from "node:fs/promises";
 import { resolve, dirname, join, relative, isAbsolute } from "node:path";
 import { pathToFileURL, fileURLToPath } from "node:url";
+import { execFileSync } from "node:child_process";
+import { publishOpenxc7Regions } from "./prepare-regions.mjs";
 import { createHash } from "node:crypto";
 import { gzipSync } from "node:zlib";
 import { encodePrimitive } from "../web/prepared-format.js";
@@ -93,7 +95,10 @@ export function prepareRenderData(model, computationData) {
     computationData.routeNets,
   );
   check(
-    index.attachment.routingComplete === true,
+    index.attachment.routingComplete === true ||
+      (index.attachment.timingModel?.model ===
+        "nextpnr-xilinx single structural estimate" &&
+        index.attachment.routingComplete === false),
     "source routing must be complete",
   );
   const primitives = [],
@@ -143,7 +148,7 @@ export function prepareRenderData(model, computationData) {
     const from = cellPoint(index.pins[arc.from].cell),
       to = cellPoint(index.pins[arc.to].cell);
     if (!route.nodes.length) {
-      if (from && to)
+      if (from && to && !index.attachment.timingModel)
         ids.add(
           add(`unresolved/${arcId}`, {
             type: "segments",
@@ -180,6 +185,7 @@ export function prepareRenderData(model, computationData) {
     routes.push({
       arc: arcId,
       disposition: route.disposition,
+      requested: index.routing.nets.has(index.nets[arc.net].id),
       primitives: [...ids],
       gapCounts,
     });
@@ -330,6 +336,8 @@ export function prepareRenderData(model, computationData) {
       registered: max("registered"),
       static: max("static"),
     },
+    timingModel: index.attachment.timingModel,
+    routingComplete: index.attachment.routingComplete,
     coverage: index.attachment.coverage,
     sourceCounts: {
       events: model.events.size,
@@ -340,8 +348,9 @@ export function prepareRenderData(model, computationData) {
       arcs: index.arcs.length,
       routeNets: computationData.routeNets.length,
     },
-    scope:
-      "Derived rendering data for every recorded write through qualified mapped targets; full native source remains separately hash-bound. SDF colors bound complete source-to-sink paths through each primitive; they are not incremental arc delay, switching, STA slack or an execution period.",
+    scope: index.attachment.timingModel
+      ? "nextpnr structural estimates for selected native cones and captured route branches. Missing evidence stays unknown."
+      : "Derived rendering data for every recorded write through qualified mapped targets; full native source remains separately hash-bound. SDF colors bound complete source-to-sink paths through each primitive; they are not incremental arc delay, switching, STA slack or an execution period.",
     operations: [...index.operations.values()].map((op) => ({
       event: op.event,
       applicability: op.applicability,
@@ -440,11 +449,32 @@ async function retain(from, to, descriptor, limit) {
 
 /** Compile one selected publication into a fresh portable directory. Ordinary
  * browser captures without this derivative remain supported by their old loader. */
-export async function prepareRender({ input, output, capture }) {
+export async function prepareRender({
+  input,
+  output,
+  capture,
+  openxc7,
+  chipdb,
+  constids,
+  regionBinSize,
+}) {
   check(input && output, "input and output are required");
+  check(
+    (!openxc7 && !chipdb && !constids) || (openxc7 && chipdb && constids),
+    "interval geometry requires --openxc7, --chipdb and --constids together",
+  );
+  check(
+    regionBinSize === undefined ||
+      (openxc7 &&
+        Number.isInteger(regionBinSize) &&
+        regionBinSize > 0 &&
+        regionBinSize <= 4096),
+    "regional bin size needs an XC7 capture and 1–4096 tiles",
+  );
   const root = resolve(input),
     out = resolve(output),
-    index = JSON.parse(await bytes(join(root, "index.json"), 4 * MiB));
+    indexBytes = await bytes(join(root, "index.json"), 4 * MiB),
+    index = JSON.parse(indexBytes);
   check(
     index.format === "spacetime-view-index" &&
       index.schema === 1 &&
@@ -524,12 +554,67 @@ export async function prepareRender({ input, output, capture }) {
     bytes: manifestBytes.length,
     sha256: hash(manifestBytes),
   };
+  const example = { ...entry, render };
+  if (entry.latencyProfile) {
+    const ref = entry.latencyProfile;
+    await retain(pathIn(root, ref.file), pathIn(out, ref.file), ref, 4 * MiB);
+  }
+  if (regionBinSize) {
+    const { regions } = await publishOpenxc7Regions({
+      model,
+      source,
+      entry,
+      indexBytes,
+      output: join(out, "regions"),
+      capture: openxc7,
+      chipdb,
+      constids,
+      binSize: regionBinSize,
+    });
+    example.regions = { ...regions, file: "regions/" + regions.file };
+  } else if (entry.regions) {
+    const ref = entry.regions,
+      from = pathIn(root, ref.file),
+      to = pathIn(out, ref.file);
+    const regions = JSON.parse(await verified(from, ref, MiB));
+    check(
+      regions.view?.sha256 === entry.sha256 &&
+        regions.source?.sha256 === entry.computations.sha256 &&
+        Array.isArray(regions.parts) &&
+        regions.parts.length <= 256,
+      "regional source mismatch",
+    );
+    await retain(from, to, ref, MiB);
+    let total = ref.bytes;
+    for (const part of regions.parts) {
+      total += part.bytes;
+      check(total <= 64 * MiB, "regional data exceeds 64 MiB");
+      await retain(
+        pathIn(dirname(from), part.file),
+        pathIn(dirname(to), part.file),
+        part,
+        8 * MiB,
+      );
+    }
+  }
+  delete example.geometry;
+  if (openxc7) {
+    const publisher = fileURLToPath(
+      new URL("./openxc7-geometry.py", import.meta.url),
+    );
+    example.geometry = JSON.parse(
+      execFileSync("python3", [publisher, out, openxc7, chipdb, constids], {
+        input: JSON.stringify(example),
+        stdio: ["pipe", "pipe", "inherit"],
+      }),
+    );
+  }
   await writeFile(
     join(out, "index.json"),
     JSON.stringify({
       format: "spacetime-view-index",
       schema: 1,
-      examples: [{ ...entry, render }],
+      examples: [example],
     }),
     { flag: "wx" },
   );
@@ -547,12 +632,22 @@ export function parseArguments(args) {
   const options = {};
   for (let i = 0; i < args.length; i += 2) {
     check(
-      ["--input", "--output", "--capture"].includes(args[i]) &&
+      [
+        "--input",
+        "--output",
+        "--capture",
+        "--openxc7",
+        "--chipdb",
+        "--constids",
+        "--region-bin-size",
+      ].includes(args[i]) &&
         args[i + 1] &&
         !args[i + 1].startsWith("--"),
       "invalid option",
     );
-    options[args[i].slice(2)] = args[i + 1];
+    if (args[i] === "--region-bin-size")
+      options.regionBinSize = Number(args[i + 1]);
+    else options[args[i].slice(2)] = args[i + 1];
   }
   return options;
 }
@@ -562,7 +657,7 @@ if (
 ) {
   if (process.argv.includes("--help"))
     console.log(
-      "Usage: prepare-render.mjs --input COMPUTATION_PUBLICATION --output FRESH_DIRECTORY [--capture RECORDING_FILE]",
+      "Usage: prepare-render.mjs --input COMPUTATION_PUBLICATION --output FRESH_DIRECTORY [--capture RECORDING_FILE] [--openxc7 CAPTURE --chipdb CHIPDB --constids CONSTIDS [--region-bin-size TILES]]",
     );
   else
     prepareRender(parseArguments(process.argv.slice(2)))

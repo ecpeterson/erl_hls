@@ -1,3 +1,4 @@
+import { recordingBuildKeys } from "./recording-build.js";
 import { nativePaths } from "./native-paths.js";
 
 /** Validate a hash-bound native routing attachment and select only each static
@@ -30,14 +31,12 @@ function digest(value) {
 
 /** Compare all compiler/capture identities without depending on object key order. */
 function buildKey(build) {
+  const keys = recordingBuildKeys(build);
   requireValue(
-    build &&
-      ["source", "rtl", "observation", "implementation"].every((key) =>
-        digest(build[key]),
-      ),
+    build && keys.every((key) => digest(build[key])),
     "invalid build identity",
   );
-  return [build.source, build.rtl, build.observation, build.implementation].join("/");
+  return keys.map((key) => build[key]).join("/");
 }
 
 /** Collect bounded, explicitly reviewed capture-origin links while retaining the
@@ -243,7 +242,35 @@ function netGraph(net, budget, tiles) {
       pin.routing_node === null || nodes.has(pin.routing_node),
       "pin routing node outside used net",
     );
-    if (pin.status === "resolved")
+    const permutation = pips.get(pin.lut_permutation_pip);
+    const lut = /^(SLICE_X\d+Y\d+)\/([ABCD])[56]LUT\/(A[1-6])$/.exec(
+      pin.bel_pins[0],
+    );
+    const mappedLut =
+      permutation &&
+      lut &&
+      pin.direction === "IN" &&
+      pin.port === lut[3] &&
+      pin.bel_wire === `SITEWIRE/${lut[1]}/${lut[2]}${pin.port[1]}` &&
+      permutation.direction_status === "directional" &&
+      text(permutation.native_switch) &&
+      permutation.to_node === pin.routing_node &&
+      /^[1-6]$/.test(pin.routing_node?.slice(-1)) &&
+      pin.routing_node.slice(0, -1) === `SITEWIRE/${lut[1]}/${lut[2]}`;
+    if (pin.lut_permutation_pip !== undefined)
+      requireValue(
+        mappedLut && pin.status === "resolved",
+        "invalid LUT permutation attachment",
+      );
+    if (pin.status === "resolved" && Object.hasOwn(pin, "bel_wire"))
+      requireValue(
+        pin.bel_pins.length === 1 &&
+          pin.site_pins.length === 0 &&
+          text(pin.bel_wire) &&
+          (pin.bel_wire === pin.routing_node || mappedLut),
+        "resolved BEL pin lacks exact bound wire",
+      );
+    else if (pin.status === "resolved")
       requireValue(
         pin.routing_node !== null &&
           pin.site_pins.every((site) => site.node !== null) &&
@@ -356,7 +383,9 @@ function branchBetween(graph, source, target, budget) {
       (target.direction === null || ["IN", "INOUT"].includes(target.direction)),
     "timing endpoint direction mismatch",
   );
-  const gaps = [pinGap(source, "source"), pinGap(target, "target")];
+  const gaps = [];
+  if (!source.bel_wire) gaps.push(pinGap(source, "source"));
+  if (!target.bel_wire) gaps.push(pinGap(target, "target"));
   if (source.status !== "resolved" || target.status !== "resolved") {
     const disposition = [source.status, target.status].includes("ambiguous")
       ? "ambiguous"
@@ -471,6 +500,7 @@ function branchBetween(graph, source, target, budget) {
  * candidates. Null site-node mappings are unresolved, never proven unused. */
 function candidates(pin) {
   if (!["resolved", "ambiguous"].includes(pin.status)) return [];
+  if (pin.status === "resolved" && pin.bel_wire) return [pin.bel_wire];
   return [
     ...new Set(
       pin.site_pins.map((site) => site.node).filter((node) => node !== null),
@@ -512,6 +542,8 @@ function branch(graph, sourcePin, targetPin, budget) {
       "Every located source candidate is interior to directed used routing",
       gaps,
     );
+  if (source.bel_wire && target.bel_wire)
+    return branchBetween(graph, source, target, budget);
   if (roots.length * targetNodes.length > 64)
     return unresolved(
       graph,
@@ -566,20 +598,22 @@ function branch(graph, sourcePin, targetPin, budget) {
   const endpointGaps = [
     [source, "source", selected.start, sourceNodes],
     [target, "target", selected.end, targetNodes],
-  ].map(([pin, end, chosen, known]) => ({
-    ...pinGap(pin, end),
-    node: chosen,
-    observedStatus: pin.status,
-    locatedCandidates: known,
-    unresolvedSitePins: pin.site_pins
-      .filter((site) => site.node === null)
-      .map((site) => site.id),
-    reason:
-      "Unique branch among explicitly located admissible native attachments; intra-site wire geometry remains unavailable" +
-      (pin.site_pins.some((site) => site.node === null)
-        ? "; additional site-node mappings are unresolved, not proven unused"
-        : ""),
-  }));
+  ]
+    .filter(([pin]) => !pin.bel_wire)
+    .map(([pin, end, chosen, known]) => ({
+      ...pinGap(pin, end),
+      node: chosen,
+      observedStatus: pin.status,
+      locatedCandidates: known,
+      unresolvedSitePins: pin.site_pins
+        .filter((site) => site.node === null)
+        .map((site) => site.id),
+      reason:
+        "Unique branch among explicitly located admissible native attachments; intra-site wire geometry remains unavailable" +
+        (pin.site_pins.some((site) => site.node === null)
+          ? "; additional site-node mappings are unresolved, not proven unused"
+          : ""),
+    }));
   return {
     ...selected.result,
     disposition: unlocated ? "partial" : "resolved",
@@ -695,16 +729,37 @@ export function nativeRoutes(model, detail = model.document.nativeRoutes) {
     "selection digest mismatch",
   );
   const current = model.bundle.build;
-  const physicalOrigins = origins(catalogue, current, catalogue.checkpoint);
-  const timingOrigins = origins(timing, current, catalogue.checkpoint);
-  requireValue(
-    JSON.stringify(physicalOrigins) === JSON.stringify(timingOrigins),
-    "physical/static timing origin disagreement",
-  );
-  requireValue(
-    physicalOrigins.some((origin) => origin.build === buildKey(detail.build)),
-    "native build absent from qualified origin chain",
-  );
+  // openXC7 source and observation IDs may be caller labels. Bind them verbatim
+  // to the current capture, whose manifest and routed checkpoint are content hashes.
+  if (model.document.openxc7Routes) {
+    const routeSource = model.document.openxc7Routes;
+    requireValue(
+      digest(current.rtl) &&
+        digest(current.implementation) &&
+        current.implementation === routeSource.implementation &&
+        routeSource.checkpoint === catalogue.checkpoint &&
+        [catalogue, timing, detail].every(
+          (record) =>
+            !record.correspondence_origin &&
+            recordingBuildKeys(current).every(
+              (key) =>
+                text(current[key]) && record.build?.[key] === current[key],
+            ),
+        ),
+      "openXC7 route build or checkpoint mismatch",
+    );
+  } else {
+    const physicalOrigins = origins(catalogue, current, catalogue.checkpoint);
+    const timingOrigins = origins(timing, current, catalogue.checkpoint);
+    requireValue(
+      JSON.stringify(physicalOrigins) === JSON.stringify(timingOrigins),
+      "physical/static timing origin disagreement",
+    );
+    requireValue(
+      physicalOrigins.some((origin) => origin.build === buildKey(detail.build)),
+      "native build absent from qualified origin chain",
+    );
+  }
   requireValue(
     Array.isArray(detail.nets) &&
       detail.nets.length <= LIMITS.nets &&

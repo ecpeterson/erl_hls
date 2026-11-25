@@ -106,7 +106,7 @@ export function createSinkInspector(onChange) {
       return;
     }
     $("sink-path-summary").textContent =
-      `${ns(path.delayNs)} ns = ${ns(path.logicDelayNs)} logic + ${ns(path.netDelayNs)} net delay · ${path.arcIndices.length} arcs · ${path.ties.branchingEncountered ? "one of tied maximizing chains" : "one representative maximizing chain"}. Independent SDF bounds, not observed switching or a physical period.${path.delayNs === 0 ? " Zero-delay arcs use equal strip widths." : " Strip widths show each arc’s delay; zero-delay arcs remain in the ordered list."}`;
+      `${ns(path.delayNs)} ns = ${ns(path.logicDelayNs)} logic + ${ns(path.netDelayNs)} net delay · ${path.arcIndices.length} arcs · ${path.ties.branchingEncountered ? "one of tied maximizing chains" : "one representative maximizing chain"}. ${index.data?.timingModel ? "Single nextpnr delay model." : "Independent SDF bounds."}${path.delayNs === 0 ? " Zero-delay arcs use equal strip widths." : " Strip widths show each arc’s delay; zero-delay arcs remain in the ordered list."}`;
     const step = (arc) => {
       const [from, to, type, delay] = index.arcGeometry[arc];
       return { arc, from, to, kind: type === 0 ? "net" : "logic", delay };
@@ -132,7 +132,10 @@ export function createSinkInspector(onChange) {
       `<ol>${steps.map((s) => `<li><button type="button" data-arc="${s.arc}" aria-pressed="${activeArc === s.arc}">${esc(labels.get(s.arc))}</button></li>`).join("")}</ol>`;
     $("sink-arc-detail").textContent =
       activeArc === null
-        ? "Click a strip segment or an ordered arc to highlight its available 3D geometry. Height within a connection is interpolated. A thin core with a dashed sleeve marks schematic connections across missing route detail."
+        ? "Click a strip segment or an ordered arc to highlight its available 3D geometry. Height within a connection is interpolated. " +
+          (index.data?.timingModel
+            ? "Missing route segments are omitted."
+            : "A thin core with a dashed sleeve marks schematic connections across missing route detail.")
         : labels.get(activeArc);
   }
   $("sink-list").onclick = (event) => {
@@ -249,8 +252,13 @@ export function createSinkInspector(onChange) {
         path?.arcIndices.filter((a) => visible.get(a)?.schematic).length ?? 0;
       const selectedGeometry =
         activeArc === null ? null : visible.get(activeArc);
+      const omitted =
+        path?.arcIndices.filter((a) => visible.get(a)?.geometryIncomplete)
+          .length ?? 0;
       $("sink-geometry").textContent = path
-        ? `${bridged} visible path arcs use schematic endpoint connections: thin continuous core + dashed sleeve. Their native routing geometry remains incomplete; endpoint timing is known.` +
+        ? (index.data?.timingModel
+            ? `${omitted} visible path arcs have incomplete routing geometry. Missing segments are omitted. Endpoint delays remain inspectable.`
+            : `${bridged} visible path arcs use schematic endpoint connections: thin continuous core + dashed sleeve. Their native routing geometry remains incomplete; endpoint timing is known.`) +
           (selectedGeometry
             ? ` Selected arc: ${selectedGeometry.schematic ? "schematic endpoint connection" : selectedGeometry.geometryIncomplete ? "incomplete routing geometry" : "retained endpoint / routing connectivity"}.`
             : "")
@@ -264,6 +272,9 @@ export function createSinkInspector(onChange) {
     },
     get selection() {
       return selection;
+    },
+    get pathArcs() {
+      return path?.arcIndices ?? [];
     },
     get activeArc() {
       return activeArc;

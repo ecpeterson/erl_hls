@@ -9,7 +9,7 @@
   "patch_revision": "05a16983f3e9ffcbf4a59abf39e5029ff6817dd6",
   "bazel_url": "https://github.com/bazelbuild/bazel/releases/download/8.7.0/bazel-8.7.0-linux-x86_64",
   "bazel_sha256": "d7606e679b78067c811096fb3d6cf135225b528835ca396e3a4dddf957859544",
-  "asset_repository": "ecpeterson/hls_fabric",
+  "asset_repository": "ecpeterson/erl_hls",
   "asset_tag": "xls-ram-9f360fc89-05a16983",
   "asset_name": "codegen_main-linux-x86_64.gz",
   "asset_sha256": "3ce01608163a5e551dd6b2ee260eeadf568200e6c06458e6464ffea5f0999ae9",

@@ -65,6 +65,18 @@ test("global STA normalizes without geometry and retains immutable provenance", 
   );
 });
 
+test("saved Vivado clock references retain three-field provenance", () => {
+  const model = fixture();
+  delete model.bundle.build.implementation;
+  const reference = validateClockReference(model);
+  assert.deepEqual(reference.build, model.bundle.build);
+  model.catalogue.build = { ...model.catalogue.build, implementation: "i" };
+  assert.throws(
+    () => validateClockReference(model),
+    /build\/checkpoint mismatch/,
+  );
+});
+
 test("missing STA has no implicit period and manual assumptions stay explicit", () => {
   const model = fixture();
   delete model.document.clockReference;

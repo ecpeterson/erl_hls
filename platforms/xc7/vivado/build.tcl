@@ -15,14 +15,18 @@ file copy -force [file join $root manifest.json] [file join $output input-manife
 set_param general.maxThreads 4
 create_project -in_memory -part xc7z030sbg485-1
 set_property target_language Verilog [current_project]
-cd [file join $root inputs generated]
-set files [glob *.v]
-lappend files ../zynq_ps_probe.v ../zynq_ps_probe_top.v
-foreach pattern {../gtx/*.v ../ethernet/*.v ../dma/*.v} {
-    lappend files {*}[glob $pattern]
+if {$profile eq "phi"} {
+    set files [glob -directory [file join $root inputs phi] *.v]
+} elseif {$profile eq "micro"} {
+    set files [list [file join $root inputs micro.v]]
+} else {
+    cd [file join $root inputs generated]
+    set files [glob *.v]
+    lappend files ../zynq_ps_probe.v ../zynq_ps_probe_top.v
+    foreach pattern {../gtx/*.v ../ethernet/*.v ../dma/*.v} {
+        lappend files {*}[glob $pattern]
+    }
 }
-if {$profile eq "phi"} {set files [glob ../phi/*.v]}
-if {$profile eq "micro"} {set files [list ../micro.v]}
 foreach file $files {read_verilog -sv $file}
 set top [dict get {register zynq_ps_probe_top dma zynq_dma_top prbs te0715_gtx_top
                   ethernet-loopback te0715_ethernet_top ethernet-external te0715_ethernet_top

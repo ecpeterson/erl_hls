@@ -242,6 +242,12 @@ function stateFor(index) {
     });
   return caches.get(index);
 }
+/** Replace the bounded set of demand-loaded net branches and invalidate layouts built from the previous set. */
+export function setInspectedRoutes(index, routes) {
+  const state = stateFor(index);
+  state.inspected = routes;
+  state.results.clear();
+}
 function remember(cache, key, result) {
   const size = (value) =>
     value.segments.length +
@@ -482,10 +488,13 @@ export function arrivalCircuit(
       if (type === 1)
         geometry = from && to ? [{ from, to, kind: "logic" }] : [];
       else {
-        const route = cache.routes.get(arcId);
-        geometry = (route?.primitives ?? [])
-          .map((id) => index.primitives[id])
-          .filter((row) => row?.type === "segments");
+        const inspected = cache.inspected?.get(arcId);
+        const route = inspected ?? cache.routes.get(arcId);
+        geometry =
+          inspected?.segments ??
+          (route?.primitives ?? [])
+            .map((id) => index.primitives[id])
+            .filter((row) => row?.type === "segments");
         completeGeometry = completeBranch(route, geometry, from, to);
         if (!completeGeometry) incomplete.add(arcId);
       }
@@ -497,6 +506,7 @@ export function arrivalCircuit(
         unavailable.add(arcId);
       const bridge = Boolean(
         bridgeKnownGeometry &&
+          !index.data?.timingModel &&
           type === 0 &&
           !completeGeometry &&
           known &&

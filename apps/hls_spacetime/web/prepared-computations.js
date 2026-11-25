@@ -108,7 +108,10 @@ export function createPreparedComputations(model, data) {
       ) &&
       counts.events === model.events.size &&
       counts.cells === model.cells.size &&
-      counts.routeNets === counts.nets,
+      (counts.routeNets === counts.nets ||
+        (data.timingModel &&
+          data.routingComplete === false &&
+          counts.routeNets < counts.nets)),
     "invalid source population counts",
   );
   check(

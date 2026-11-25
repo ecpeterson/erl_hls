@@ -1,0 +1,72 @@
+{
+  "evidence": "simulation_witness",
+  "scope": "Settled primitive-level activity over 4,096 cycles. Static delays modeled on the retained placement. No native routing resources bound.",
+  "artifactDirectory": "runs/spacetime-g4-parity-2026-11-24/four-phi-placement-timing",
+  "rawSdf": "verification/placed.sdf.gz",
+  "inventorySha256": "b89c774c196ec300bf4dd5ee8c5065c39617447d43cf566a6e9d8beb6f48fe19",
+  "sources": {
+    "checkpoint": "dd15b35c1d78603932db09dd40496ef915cdb2f946aad7c221f71b3eb9a6f2d9",
+    "sdf": "a79d73532b7f90854c53181387042f159655243bd6e7778de330954240c75dd4",
+    "router": "369e8a856e33270e3888a33206dc58f234b58f2c3f003da7ff0d0f9618661473",
+    "chipdb": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba"
+  },
+  "counts": {
+    "clockLoads": 29987,
+    "reportedCellArcs": 1454379,
+    "placedNetRecords": 85828,
+    "clockPins": 29952,
+    "nonclockConnections": 259159,
+    "usedCellArcs": 728397,
+    "unreachedConnections": 48519,
+    "unobservedConnections": 5880,
+    "timedConnections": 204760,
+    "unreachedCellArcs": 360721,
+    "unobservedCellArcs": 2940,
+    "timedCellArcs": 364736
+  },
+  "assets": {
+    "edges": {
+      "file": "openxc7-placed-edges.gz",
+      "sha256": "7a67acedc3191bcd806fd4fd7e9966cff91d73807ff0489c0980c64b755b5f46"
+    },
+    "pins": {
+      "file": "openxc7-placed-pins.gz",
+      "sha256": "8cf655dfea67a3a6f428aee7a532ed791b69299a56fd7371eb75ba28c0f1de9a"
+    }
+  },
+  "distanceCheck": {
+    "intertile": 166605,
+    "sameTile": 38155,
+    "maxIntertileResidualPs": 1,
+    "source": "pinned Arch::predictDelay; integer delays after SDF serialization"
+  },
+  "legacyC32": {
+    "connections": 2780,
+    "depthJumpsGreaterThanOne": 1152,
+    "largestDepthJump": 30.0
+  },
+  "selectedRamToDsp": {
+    "cells": 10,
+    "interconnect": 9,
+    "cellArcs": 9,
+    "predictedNetPs": 11565.0,
+    "modeledCellPs": 4002.0,
+    "first": "DOADO11",
+    "last": "A7"
+  },
+  "visibleAtClock": {
+    "0": {},
+    "32": {
+      "connections": 3484,
+      "primitiveArcs": 64664
+    },
+    "105": {
+      "connections": 558,
+      "primitiveArcs": 1661
+    },
+    "572": {
+      "connections": 1460,
+      "primitiveArcs": 3797
+    }
+  }
+}

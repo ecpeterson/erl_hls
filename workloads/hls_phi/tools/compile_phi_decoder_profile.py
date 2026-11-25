@@ -36,7 +36,12 @@ def checked_inputs(snapshot: Path, *, assets: Path | None = None) -> dict:
     if not isinstance(inputs, dict) or not {TOPOLOGY, WRAPPER, PROFILE, BUILD_PROFILE} <= inputs.keys():
         raise ValueError("profile input manifest omits required generated files")
     for name, expected in inputs.items():
-        if Path(name).name != name or not (name.endswith(".x") or name in (WRAPPER, PROFILE, BUILD_PROFILE)):
+        parts = Path(name).parts
+        companion = (len(parts) > 1 and parts[0].endswith("_helpers")
+                     and parts[0].removesuffix("_helpers") + ".x" in inputs)
+        if (str(Path(name)) != name or ".." in parts or Path(name).is_absolute()
+                or not (name.endswith(".x") and (len(parts) == 1 or companion)
+                        or name in (WRAPPER, PROFILE, BUILD_PROFILE))):
             raise ValueError(f"invalid profile input name: {name!r}")
         path = snapshot / name if name.endswith(".x") else assets / name
         if hashlib.sha256(path.read_bytes()).hexdigest() != expected:

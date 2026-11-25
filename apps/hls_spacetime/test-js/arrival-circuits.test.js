@@ -743,3 +743,22 @@ test("coincident ordinary and schematic spans merge with the schematic warning r
   assert.equal(result.summary.schematicArcs, 1);
   assert.equal(result.details.find((row) => row.arc === 3).schematic, false);
 });
+
+test("missing openXC7 branches keep both timed endpoints without drawing a chord", () => {
+  const { index, layer } = fixture();
+  index.data = {
+    ...index.data,
+    timingModel: { model: "nextpnr-xilinx single structural estimate" },
+  };
+  index.routes = index.routes.filter((row) => row.arc !== 0);
+  const result = arrivalCircuit(index, layer, { bridgeKnownGeometry: true });
+  const arc = result.details.find((row) => row.arc === 0);
+  assert.equal(arc.geometryIncomplete, true);
+  assert.equal(arc.schematic, false);
+  assert.ok(Number.isFinite(arc.arrivalViaNs));
+  assert.ok(
+    !result.segments.some(
+      (row) => row.arcIds.includes(0) && row.geometryKind === "endpoint_bridge",
+    ),
+  );
+});

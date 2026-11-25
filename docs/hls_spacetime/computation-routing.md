@@ -2,7 +2,7 @@
 
 This workflow associates recorded storage writes with the native timing/connectivity circuitry feeding their qualified FF inputs. It retains the complete native net/pin population, both SDF corners and every event disposition. It does not select a worst-path subset, enumerate exponentially many paths, infer missing bit mappings, or establish electrical activity. The older [selected STA overlay](native.md#selected-routed-topology) remains an independent comparison.
 
-Start with a prepared recording from [capture to view](workflow.md), the complete native export from the exact checkpoint, and its already verified fast/slow STA SDF files. Native collection must have verified exit/guards, process termination and all input/output hashes. The native manifest's row/byte counts alone do not authenticate a measurement.
+For openXC7, the [native timing workflow](native.md#openxc7-routes-and-computation-timing) feeds the same computation renderer with a single nextpnr model. For the Vivado workflow below, start with a prepared recording from [capture to view](workflow.md), the complete native export from the exact checkpoint, and its already verified fast/slow STA SDF files. Native collection must have verified exit/guards, process termination and all input/output hashes. The native manifest's row/byte counts alone do not authenticate a measurement.
 
 ## Project saved timing and connectivity
 

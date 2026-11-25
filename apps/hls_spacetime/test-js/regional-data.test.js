@@ -183,6 +183,14 @@ test("native contributors reconcile without branch, sink or clock double countin
   assert.deepEqual(data, snapshot);
 });
 
+test("historical region data requires matching build fields and the exact checkpoint", () => {
+  const { model, data } = fixture();
+  delete model.bundle.build.implementation;
+  assert.equal(createRegionalData(model, data).summary.pips, 3);
+  data.build = { ...data.build, implementation: "f".repeat(64) };
+  assert.throws(() => createRegionalData(model, data), /Regional data:/);
+});
+
 test("coincident distinct PIPs remain distinct physical resource contributors", () => {
   const { model, data } = fixture();
   data.pips.push({ ...data.pips[0], id: "another-pip", nets: [0] });

@@ -104,7 +104,7 @@
       <p>
         Register Q → D/control excludes external and constant launches,
         clock-to-Q and setup. Whole-cone timing includes all source boundaries.
-        Both preserve the full selected cone and use conservative SDF bounds.
+        Both preserve the full selected cone and use its supplied static timing model.
         Actor, task and operation filters select work; function and delay
         filters select its circuits. The prepared viewer loads rendering
         indexes; the original native graph and records remain separately
@@ -749,6 +749,16 @@
                   aria-live="polite"
                 ></p>
                 <p id="sink-geometry" class="muted"></p>
+                <section id="interval-panel" hidden>
+                  <h4>Interval routing geometry</h4>
+                  <p id="interval-census"></p>
+                  <label>Net arc ID or full sink pin <input id="interval-arc" type="text" /></label>
+                  <button id="interval-inspect" type="button">Inspect branch</button>
+                  <p id="interval-status" role="status"></p>
+                  <p id="interval-detail"></p>
+                  <canvas id="interval-map" width="320" height="144" hidden aria-label="Branch tile wires in blue and fixed PIPs in amber"></canvas>
+                  <details><summary>Ordered native switches</summary><ol id="interval-switches"></ol></details>
+                </section>
                 <details>
                   <summary>All ordered arcs, including zero-delay arcs</summary>
                   <div id="sink-steps" class="sink-steps"></div>
@@ -912,6 +922,16 @@
                 Installed-cell concentration</label
               >
               <p id="spatial-summary" class="storage-summary"></p>
+              <p id="openxc7-timing-model" class="muted" hidden></p>
+              <details id="openxc7-routing" hidden>
+                <summary>openXC7 routes</summary>
+                <p data-net-count></p>
+                <label>Net <select data-net></select></label>
+                <label>Sink pin <select data-sink></select></label>
+                <p><output aria-live="polite"></output></p>
+                <canvas width="280" height="128" aria-label="Tile footprint of the selected branch"></canvas>
+                <details><summary>Directed PIPs in path order</summary><ol></ol></details>
+              </details>
               <p class="muted">
                 Gold marks the selected resource’s associated cells, which may
                 be spread across the chip. This is storage placement, not the

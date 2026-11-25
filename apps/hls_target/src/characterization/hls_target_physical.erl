@@ -11,7 +11,7 @@ Physical companion validation for hls_spacetime recordings. Checks build identit
 -type id() :: binary().
 %% Exact source, generated RTL, observation and implementation identities bind both companions.
 -type build() :: hls_observation_build:build().
-%% Primitive placement uses one common tile grid; properties retain native strings.
+%% Placed sites share a tile grid. A site-only report may leave its intra-site BEL unknown.
 -type cell() :: #{
     id := id(),
     kind := binary(),
@@ -19,7 +19,7 @@ Physical companion validation for hls_spacetime recordings. Checks build identit
     bel := binary() | null,
     x := non_neg_integer() | null,
     y := non_neg_integer() | null,
-    placement => placed | unplaced,
+    placement => placed | unplaced | unknown,
     tile => binary(),
     clock_region => binary(),
     properties := #{binary() => binary()}
@@ -209,14 +209,14 @@ cell(
     #{
         id := Id,
         kind := Kind,
-        placement := unplaced,
+        placement := Status,
         site := null,
         bel := null,
         x := null,
         y := null,
         properties := Properties
     } = Cell
-) ->
+) when Status =:= unplaced; Status =:= unknown ->
     lists:foreach(fun identifier/1, [Id, Kind]),
     cell_properties(Id, Properties),
     cell_location(Cell),
@@ -226,7 +226,15 @@ cell(
         Cell
 ) ->
     require(maps:get(placement, Cell, placed) =:= placed, {invalid_cell_placement, Id}),
-    lists:foreach(fun identifier/1, [Id, Kind, Site, Bel]),
+    lists:foreach(fun identifier/1, [Id, Kind]),
+    case {Site, Bel} of
+        {KnownSite, null} when is_binary(KnownSite) -> ok;
+        _ -> identifier(Bel)
+    end,
+    case Site of
+        null -> identifier(maps:get(tile, Cell));
+        _ -> identifier(Site)
+    end,
     require(
         is_integer(X) andalso X >= 0 andalso X < (1 bsl 53) andalso
             is_integer(Y) andalso Y >= 0 andalso Y < (1 bsl 53),
@@ -308,8 +316,12 @@ disposition(unmapped, _Generated, 0) ->
 disposition(Disposition, Generated, Cells) ->
     fail({invalid_binding_cardinality, Disposition, Generated, Cells}).
 
-%% Distributed words need complete per-bit evidence; partial observations remain uncertain.
+%% Widthless logic can span primitives. Distributed words require complete per-bit evidence.
 -spec bit_bindings(map(), map(), map()) -> ok.
+bit_bindings(#{disposition := distributed} = Binding, #{kind := logic} = Resource, _Pins) when
+    not is_map_key(width, Resource), not is_map_key(bits, Binding)
+->
+    ok;
 bit_bindings(#{disposition := distributed} = Binding, Resource, Pins) ->
     require(maps:is_key(bits, Binding), missing_distributed_bits),
     Bits = maps:get(bits, Binding),

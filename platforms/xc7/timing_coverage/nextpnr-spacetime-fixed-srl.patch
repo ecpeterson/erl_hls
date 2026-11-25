@@ -1,0 +1,46 @@
+--- a/xilinx/arch.cc
++++ b/xilinx/arch.cc
+@@ -2417,6 +2417,8 @@
+            s == "OVERFLOW" || s == "UNDERFLOW" || s == "ACOUT" || s == "BCOUT";
+ }
+-
++
++#include "fixed_srl.inc"
++
+ bool Arch::getCellDelay(const CellInfo *cell, IdString fromPort, IdString toPort, DelayInfo &delay) const
+ {
+     int tt_id = -1, inst_id = -1;
+@@ -2426,6 +2428,8 @@
+     }
+-
++
+     if (cell->type == id_SLICE_LUTX) {
++        if (xc7FixedSrl(this, cell))
++            return false;
+         // Fractured LUT pairs share their physical input pins: the
+         // post-placement and post-routing legalisation bind a shared pin to
+         // BOTH cells of the pair and erase the X_ORIG_PORT_<pin> attribute
+@@ -2495,6 +2499,12 @@
+ TimingPortClass Arch::getPortTimingClass(const CellInfo *cell, IdString port, int &clockInfoCount) const
+ {
+     if (cell->type == id_SLICE_LUTX) {
++        if (xc7FixedSrl(this, cell)) {
++            TimingClockingInfo info;
++            auto kind = xc7FixedSrlTiming(this, cell, port, info);
++            clockInfoCount = (kind == TMG_REGISTER_INPUT || kind == TMG_REGISTER_OUTPUT) ? 1 : 0;
++            return kind;
++        }
+         if (get_net_or_empty(cell, id_O5) == nullptr && get_net_or_empty(cell, id_O6) == nullptr)
+             return TMG_IGNORE;
+         if (port == id_A1 || port == id_A2 || port == id_A3 || port == id_A4 || port == id_A5 || port == id_A6)
+@@ -2550,6 +2560,10 @@
+ TimingClockingInfo Arch::getPortClockingInfo(const CellInfo *cell, IdString port, int index) const
+ {
+     TimingClockingInfo info;
++    if (xc7FixedSrl(this, cell)) {
++        xc7FixedSrlTiming(this, cell, port, info);
++        return info;
++    }
+     if (cell->type == id("DSP48E1_DSP48E1")) {
+         xc7MultiplyTiming(this, cell, port, info);
+         return info;

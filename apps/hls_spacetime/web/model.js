@@ -81,6 +81,45 @@ export function resourcesForEvent(event) {
   ];
 }
 
+/** Verify the placement references of an optional producer-selected structural path.
+ * Events navigate to the path. These references never introduce execution dependencies. */
+function checkHardwarePath(path, catalogue, cells, events) {
+  if (path === undefined) return;
+  requireValue(
+    catalogue &&
+      path?.checkpoint === catalogue.checkpoint &&
+      [
+        "reported setup path",
+        "placed netlist connectivity",
+        "routed netlist connectivity",
+      ].includes(path.basis) &&
+      typeof path.description === "string" &&
+      path.description.length > 0 &&
+      Array.isArray(path.events) &&
+      path.events.length > 0 &&
+      path.events.every((id) => events.has(id)) &&
+      Array.isArray(path.steps) &&
+      path.steps.length >= 2 &&
+      path.steps.length <= 512,
+    "Invalid hardware path identity or selection",
+  );
+  for (const [index, step] of path.steps.entries()) {
+    const cell = cells.get(step?.cell);
+    requireValue(
+      cell &&
+        Number.isInteger(cell.x) &&
+        Number.isInteger(cell.y) &&
+        (index === 0 ||
+          (typeof step.net === "string" && step.net.length > 0)) &&
+        ((typeof step.input === "string" && step.input.length > 0) ||
+          (index === 0 && step.input === null)) &&
+        ((typeof step.output === "string" && step.output.length > 0) ||
+          (index === path.steps.length - 1 && step.output === null)),
+      "Invalid hardware path cell or pin",
+    );
+  }
+}
+
 /** Build reusable indexes once. Geometry remains one unique cell table regardless
  * of the number of displayed clocks. All dependency edges come from recorded
  * versions, read requests or explicit relations; chronology creates no edge. */
@@ -145,6 +184,7 @@ export function createModel(document) {
   );
   const cells = index(catalogue?.cells, "cell");
   const bindings = index(catalogue?.bindings, "binding", "resource");
+  checkHardwarePath(document.hardwarePath, catalogue, cells, events);
   const epochs = index(bundle.capture.incarnations, "incarnation");
   const model = {
     document,

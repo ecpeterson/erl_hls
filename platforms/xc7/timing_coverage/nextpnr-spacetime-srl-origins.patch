@@ -1,0 +1,50 @@
+--- a/xilinx/pack.cc
++++ b/xilinx/pack.cc
+@@ -713,6 +713,18 @@
+     srl_rules[ctx->id("SRLC32E")].set_attrs.emplace_back(ctx->id("X_LUT_AS_SRL"), "1");
+     // FIXME: Q31 support
+     generic_xform(srl_rules, true);
++    // Address slots move after generic_xform has recorded their original logical pins.
++    auto rename_srl_port = [&](CellInfo *ci, IdString from, IdString to) {
++        rename_port(ctx, ci, from, to);
++        IdString old_attr = ctx->id("X_ORIG_PORT_" + from.str(ctx));
++        IdString new_attr = ctx->id("X_ORIG_PORT_" + to.str(ctx));
++        auto origin = ci->attrs.find(old_attr);
++        if (origin != ci->attrs.end()) {
++            Property value = origin->second;
++            ci->attrs.erase(old_attr);
++            ci->attrs[new_attr] = value;
++        }
++    };
+     // Fixup SRL inputs
+     for (auto cell : sorted(ctx->cells)) {
+         CellInfo *ci = cell.second;
+@@ -721,7 +733,7 @@
+         std::string orig_type = str_or_default(ci->attrs, ctx->id("X_ORIG_TYPE"));
+         if (orig_type == "SRL16E") {
+             for (int i = 3; i >= 0; i--) {
+-                rename_port(ctx, ci, ctx->id("A" + std::to_string(i)), ctx->id("A" + std::to_string(i + 2)));
++                rename_srl_port(ci, ctx->id("A" + std::to_string(i)), ctx->id("A" + std::to_string(i + 2)));
+             }
+             // A 5LUT-position SRL16E (imported Vivado placement) takes its
+             // data in via DI1 (the AI pin) and outputs on O5; the default
+@@ -733,8 +745,8 @@
+                 bel->second.as_string().find("5LUT") != std::string::npos)
+                 is5 = true;
+             if (is5) {
+-                rename_port(ctx, ci, id_DI2, id_DI1);
+-                rename_port(ctx, ci, id_O6, id_O5);
++                rename_srl_port(ci, id_DI2, id_DI1);
++                rename_srl_port(ci, id_O6, id_O5);
+             }
+             for (auto tp : is5 ? std::vector<IdString>{id_A1} : std::vector<IdString>{id_A1, id_A6}) {
+                 ci->ports[tp].name = tp;
+@@ -743,7 +755,7 @@
+             }
+         } else if (orig_type == "SRLC32E") {
+             for (int i = 4; i >= 0; i--) {
+-                rename_port(ctx, ci, ctx->id("A" + std::to_string(i)), ctx->id("A" + std::to_string(i + 2)));
++                rename_srl_port(ci, ctx->id("A" + std::to_string(i)), ctx->id("A" + std::to_string(i + 2)));
+             }
+             for (auto tp : {id_A1}) {
+                 ci->ports[tp].name = tp;

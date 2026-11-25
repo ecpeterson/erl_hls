@@ -2,8 +2,8 @@
  * actors, sinks or SDF cones. This module neither predicts a changed layout nor
  * qualifies a live clock. Evidence identities are trusted inventories, not signatures. */
 import { nativePaths } from "./native-paths.js";
+import { recordingBuildKeys } from "./recording-build.js";
 
-const BUILD_KEYS = ["source", "rtl", "observation", "implementation"];
 // Native reports round displayed slack to picoseconds. Half a display unit may
 // separate a retained higher-precision value from that report's rounded summary.
 const SLACK_TOLERANCE_NS = 0.0005 + 1e-12;
@@ -50,11 +50,16 @@ export function validateClockReference(model) {
     "invalid metadata",
   );
   check(value.schema === 1, "unsupported schema");
+  const keys = recordingBuildKeys(
+    value.build,
+    model.bundle.build,
+    model.catalogue?.build,
+  );
   check(
     model.catalogue &&
       DIGEST.test(value.checkpoint) &&
       value.checkpoint === model.catalogue.checkpoint &&
-      BUILD_KEYS.every(
+      keys.every(
         (key) =>
           text(value.build?.[key]) &&
           value.build[key] === model.bundle.build?.[key] &&
@@ -141,7 +146,7 @@ export function validateClockReference(model) {
   return Object.freeze({
     schema: 1,
     build: Object.freeze(
-      Object.fromEntries(BUILD_KEYS.map((key) => [key, value.build[key]])),
+      Object.fromEntries(keys.map((key) => [key, value.build[key]])),
     ),
     checkpoint: value.checkpoint,
     clock: value.clock,

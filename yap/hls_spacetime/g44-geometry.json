@@ -1,0 +1,130 @@
+{
+  "scope": "Frozen repetition N2 XC7Z030-1 step-4 routing geometry, independently checked against retained selected-net evidence.",
+  "implementation": "6207cee189220f3b45921a15865c1f9d20bded71b0c6ac0bc685d47fb3a50e45",
+  "checkpoint": "ff99421b9c360caf90bef1673feceada86621dfef7d4a1d7084e405738891acb",
+  "chipdb": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+  "constids": "a987029ea1a962804f69f26861cbad317a8c51a4aad7f28d38529b9ecc21778a",
+  "interval": {
+    "step": 4,
+    "previousCompletionCycle": 1774,
+    "completionCycle": 1873,
+    "spacingCycles": 99,
+    "firstCycle": 1775,
+    "endCycle": 1874
+  },
+  "matchedWritesSha256": "3faf231a2ef9e3dfb2c7444eb2acedcb99a2b36a60404abcef2b9cfd926b0a75",
+  "nets": 35629,
+  "census": {
+    "counts": {
+      "direct": 50333,
+      "disconnected_constant": 2409,
+      "lut_permutation": 56849
+    },
+    "overlapping": 988,
+    "localTies": 172,
+    "nodes": 497856,
+    "pips": 462229,
+    "branches": 109591,
+    "writes": 468
+  },
+  "unavailableByNet": {
+    "$PACKER_GND_NET": 2176,
+    "$PACKER_VCC_NET": 233
+  },
+  "selected": {
+    "netCount": 74,
+    "before": {
+      "not_requested": 108603,
+      "resolved": 376,
+      "unavailable": 612
+    },
+    "after": {
+      "not_requested": 108603,
+      "resolved": 988
+    },
+    "correction": {
+      "event": "e/25066",
+      "sink": "$auto$ff.cc:337:slice$41690/D",
+      "bit": 202,
+      "registeredNs": 38.646,
+      "resolved": 36
+    },
+    "sta": {
+      "resolved": 69,
+      "dataNs": 53.623,
+      "slackNs": -48.723
+    }
+  },
+  "recording": "a706a3ff1c1507d1a38ec3ec276fc6af43e3334e83478c8ba51b7daf8b610f1e",
+  "computations": "1f1406928138a1222c337aace803f86be8d3957cf733b88b1b42d6058b9b95c9",
+  "render": "08b66055d1803ba640599896bc56f98d7ad7d0e7ef6e485b6b7418a49afd0d08",
+  "geometry": {
+    "file": "geometry/manifest.json",
+    "bytes": 170570,
+    "sha256": "81487b5994ed41fec0dc7a3a70b52141f992fcab351000f72dffce3a3763c3aa"
+  },
+  "geometryShards": {
+    "branches": {
+      "parts": 137,
+      "bytes": 17271623,
+      "largestBytes": 131071
+    },
+    "nodes": {
+      "parts": 490,
+      "bytes": 51498788,
+      "largestBytes": 131060
+    },
+    "pips": {
+      "parts": 452,
+      "bytes": 47293904,
+      "largestBytes": 112139
+    }
+  },
+  "browserWitness": {
+    "initialGeometryShardRequests": 0,
+    "firstFocusedSink": {
+      "delayNs": 51.924,
+      "initiallyMissing": 74,
+      "resolvedAfterSelection": 74
+    },
+    "outsideSelectedNets": {
+      "arc": 190170,
+      "switches": 19,
+      "physical": "SITEWIRE/SLICE_X104Y190/B4",
+      "router": "SITEWIRE/SLICE_X104Y190/B2"
+    },
+    "disconnectedConstant": {
+      "arc": 111515,
+      "cut": "INT_L_X18Y197/VCC_WIRE"
+    },
+    "vivadoBit202Ns": 5.223,
+    "xc7Bit202Ns": 38.646
+  },
+  "publication": {
+    "exit": 0,
+    "seconds": 29.680093499831855,
+    "peak_group_rss_bytes": 2310389760
+  },
+  "repeat": {
+    "exit": 0,
+    "seconds": 37.97644954221323,
+    "peak_group_rss_bytes": 1572339712
+  },
+  "byteIdenticalIndexOnRepeat": true,
+  "archive": "runs/spacetime-g4-parity-2026-11-24/g44-geometry/",
+  "nativeArchive": "../g44-repetition/native.tar.gz",
+  "artifacts": {
+    "prepared.tar.gz": {
+      "bytes": 44993660,
+      "sha256": "a80278413e1841843a90558d7582478411e7b064821294816b539b57a7cf7d00"
+    },
+    "reproduction.tar.gz": {
+      "bytes": 3972979,
+      "sha256": "30a226564d24d22b377cad9c4c6cfcbde08d1afe968d0a521a96faffcd584d4a"
+    },
+    "evidence.tar.gz": {
+      "bytes": 59574,
+      "sha256": "7e95f6042646bf45911cb23d076083b7a40ee7b22f976076dc93faf13f390db7"
+    }
+  }
+}

@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Four-Phi decoder · Spacetime</title>
+    <link rel="stylesheet" href="workload.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <p class="eyebrow">HLS Spacetime</p>
+          <h1>Four-Phi decoder</h1>
+          <p id="subtitle">Loading the paired implementation replay…</p>
+        </div>
+        <nav aria-label="Replay views">
+          <a id="other-view" hidden></a>
+          <a id="transaction" href="./?detail=transaction"
+            >C32–C37 transaction ↗</a
+          >
+        </nav>
+      </header>
+      <p role="alert" id="error" hidden></p>
+      <section aria-label="Clock navigation" class="transport">
+        <div class="controls">
+          <label for="cycle">Clock</label
+          ><button id="prev" aria-label="Previous clock">−</button
+          ><input
+            id="cycle"
+            type="number"
+            min="0"
+            value="105"
+            aria-label="Selected clock"
+          /><button id="next" aria-label="Next clock">+</button>
+          <button id="play">Play</button
+          ><select id="jump" aria-label="Jump to output frame">
+            <option>Jump to output frame</option></select
+          ><span class="frame" id="current-frame"></span>
+        </div>
+        <canvas
+          id="history"
+          height="56"
+          aria-label="Switching activity over the entire replay. Select a clock by clicking or using the clock controls."
+        ></canvas>
+        <input
+          id="scrub"
+          type="range"
+          min="0"
+          value="105"
+          aria-label="Scrub all clocks"
+        />
+        <div class="bounds"><span>C0 · reset</span><span id="end"></span></div>
+      </section>
+      <section
+        id="flow-section"
+        hidden
+        aria-label="Three-dimensional signal flow"
+      >
+        <div class="section-head">
+          <h2>3D signal flow</h2>
+          <div class="filters">
+            <label
+              >Connections
+              <select id="flow-filter">
+                <option value="both">Both primitives changing</option>
+                <option value="source">Changing driver</option>
+              </select></label
+            >
+            <label id="native-modes" hidden
+              >openXC7
+              <select id="native-geometry">
+                <option value="routes" hidden>
+                  Switch tiles · post-route ns
+                </option>
+                <option value="pins">Placed pins · estimated ns</option>
+                <option value="spans">Endpoint spans · estimated ns</option>
+                <option value="depth">Cell pairs · logic depth</option>
+              </select>
+            </label>
+            <label id="shared-scale" hidden
+              ><input type="checkbox" id="flow-shared" /> Shared ns scale</label
+            >
+            <button id="flow-fit">Reset camera</button>
+          </div>
+        </div>
+        <div class="maps">
+          <article id="vivado-flow">
+            <div class="map-head">
+              <h3>Vivado</h3>
+              <span>Routed · maximum SDF delay · ns</span>
+            </div>
+            <p class="stat" aria-live="polite"></p>
+            <canvas
+              tabindex="0"
+              aria-label="Vivado routed 3D signal flow"
+            ></canvas>
+            <p class="flow-selection"></p>
+            <details class="flow-coverage">
+              <summary>Capture coverage</summary>
+            </details>
+          </article>
+          <article id="openxc7-flow">
+            <div class="map-head">
+              <h3>openXC7</h3>
+              <span>Placed · logic depth</span>
+            </div>
+            <p class="stat" aria-live="polite"></p>
+            <canvas tabindex="0" aria-label="openXC7 3D signal flow"></canvas>
+            <p class="flow-selection"></p>
+            <details class="flow-coverage">
+              <summary>Capture coverage</summary>
+            </details>
+          </article>
+        </div>
+        <p class="caption">
+          Lines show static connections between primitives selected by the
+          clock’s activity. Drag to orbit. Scroll to zoom. Select a pin or line
+          to inspect a connection. With keyboard focus, use the arrow keys to
+          orbit and + or − to zoom.
+        </p>
+        <details>
+          <summary>How to read the geometry</summary>
+          <p>
+            The floor shows placement and highlights tiles with a known
+            primitive output change at the selected clock. Lines show structural
+            connections selected by that activity. A changed primitive can have
+            several output bits. The replay samples after settling and cannot
+            establish which pin toggled first or which path carried a
+            transition.
+          </p>
+          <p id="vivado-guide">
+            Vivado height accumulates maximum SDF delays from a launch clock
+            pin. Solid net lines pass through the recovered switch tiles, with
+            height interpolated between the two timed pins. Dashed lines join
+            endpoints where the checkpoint branch could not be resolved.
+            Vertical strokes show individual primitive timing arcs.
+          </p>
+          <p id="native-flow-guide">
+            openXC7 placement timing shows both ends of each modeled connection
+            and the delay through each primitive. Horizontal position is the
+            pin’s containing tile. Click a pin to see the other end, or choose
+            Endpoint spans for all schematic connections. nextpnr estimates net
+            delays from placement. Each axis fits its own implementation unless
+            Shared ns scale is selected. Cell pairs retains the synthesis-level
+            logic depth view.
+          </p>
+        </details>
+      </section>
+      <section id="placement-section" aria-label="Physical activity">
+        <div class="section-head">
+          <h2>Placed primitive activity</h2>
+          <div class="filters">
+            <label
+              >Zoom
+              <select id="zoom" title="Zoom both maps around the selected tile">
+                <option value="1">1×</option>
+                <option value="2">2×</option>
+                <option value="4">4×</option>
+                <option value="8">8×</option>
+              </select>
+            </label>
+            <label
+              >Window
+              <select id="window">
+                <option value="1">One clock</option>
+                <option value="8" selected>Last 8 clocks</option>
+                <option value="32">Last 32 clocks</option>
+                <option value="all">Entire replay</option>
+              </select></label
+            >
+            <label
+              ><input type="checkbox" id="scoped" /> Only selected
+              instance</label
+            >
+            <label
+              >Primitive
+              <select id="family">
+                <option>All types</option>
+              </select></label
+            >
+          </div>
+        </div>
+        <div class="maps">
+          <article id="vivado">
+            <div class="map-head">
+              <h3>Vivado</h3>
+              <span>Routed checkpoint</span>
+            </div>
+            <p class="stat"></p>
+            <canvas class="map" aria-label="Vivado floorplan"></canvas>
+            <p class="inspect"></p>
+            <div class="cells"></div>
+            <details>
+              <summary>Placement coverage</summary>
+              <p class="coverage"></p>
+            </details>
+          </article>
+          <article id="openxc7">
+            <div class="map-head">
+              <h3>openXC7</h3>
+              <span>Yosys synthesis · nextpnr placement</span>
+            </div>
+            <p class="stat"></p>
+            <canvas class="map" aria-label="openXC7 floorplan"></canvas>
+            <p class="inspect"></p>
+            <div class="cells"></div>
+            <details>
+              <summary>Placement coverage</summary>
+              <p class="coverage"></p>
+            </details>
+          </article>
+        </div>
+        <p class="caption">
+          <i class="swatch idle"></i> Occupied tile
+          <i class="swatch active"></i> Known output change · brighter tiles
+          contain more changing primitives. Select a tile to inspect it or zoom
+          around it.
+        </p>
+      </section>
+      <section aria-label="Decoder execution">
+        <div class="section-head">
+          <h2>Decoder execution</h2>
+          <label
+            >Show
+            <select id="group">
+              <option>Process</option>
+              <option>FIFO</option>
+              <option>RAM</option>
+              <option>Output</option>
+            </select></label
+          >
+        </div>
+        <p class="caption">
+          Source RTL at the rising edge. Each row groups an instance’s pipeline
+          enables and handshakes. Green marks activity, orange marks
+          backpressure and purple marks unknowns. Select a row or clock to
+          inspect its signals.
+        </p>
+        <div class="execution">
+          <div id="raster" role="group" aria-label="Instance timeline"></div>
+          <aside>
+            <h3 id="unit-title">Signal detail</h3>
+            <p id="unit-clock"></p>
+            <ul id="signals"></ul>
+          </aside>
+        </div>
+      </section>
+      <footer>
+        Simulation witness · Mapped outputs are sampled after settling, once per
+        clock. The activity masks record known output changes between samples.
+      </footer>
+    </main>
+    <script type="module" src="workload.js"></script>
+  </body>
+</html>

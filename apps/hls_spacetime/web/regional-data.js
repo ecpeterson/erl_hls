@@ -1,5 +1,7 @@
 /** Optional installed-resource bins derived from complete native routing tables.
  * Counts describe observed resource use, not capacity, utilization or congestion. */
+import { recordingBuildKeys } from "./recording-build.js";
+
 const TABLES = ["cells", "pips", "nets", "arcNets", "bins"];
 const MiB = 1024 * 1024;
 const integer = (value) => Number.isSafeInteger(value) && value >= 0;
@@ -37,7 +39,7 @@ function equalRefs(a, b, label) {
   );
 }
 function sameBuild(a, b) {
-  return ["source", "rtl", "observation", "implementation"].every(
+  return recordingBuildKeys(a, b).every(
     (key) => digest(a?.[key]) && a[key] === b?.[key],
   );
 }
@@ -419,7 +421,32 @@ export async function loadRegionalData({
       Array.isArray(rows) && rows.length === part.rows,
       "part row count mismatch",
     );
-    for (const row of rows) tables[part.table].push(row);
+    check(
+      part.encoding === undefined ||
+        (part.table === "pips" && part.encoding === "xc7-switch-v1"),
+      "unknown table encoding",
+    );
+    for (const row of rows) {
+      if (!part.encoding) tables[part.table].push(row);
+      else {
+        check(
+          Array.isArray(row) &&
+            row.length === 4 &&
+            text(row[0]) &&
+            /^[^/]+\/\d+\.\d+$/.test(row[0]),
+          "invalid compact switch",
+        );
+        const [id, x, y, nets] = row;
+        tables.pips.push({
+          id,
+          x,
+          y,
+          nets,
+          tile: id.slice(0, id.indexOf("/")),
+          directionStatus: "directional",
+        });
+      }
+    }
   }
   return { ...metadata, ...tables };
 }

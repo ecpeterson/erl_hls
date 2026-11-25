@@ -1,7 +1,14 @@
 /** Versioned tuple encoding removes repeated property names and native name strings
  * from derived geometry. Exact native identity remains in the retained source. */
 const TYPES = ["tiles", "pips", "cells", "segments"];
-const BOUNDARIES = ["sequential", "constant", "combinational", "unsupported"];
+const BOUNDARIES = [
+  "sequential",
+  "constant",
+  "combinational",
+  "unsupported",
+  "external",
+  "hard_block",
+];
 const SPANS = ["unresolved", "site", "node"];
 function check(ok) {
   if (!ok) throw Error("Prepared geometry: invalid encoded primitive");
