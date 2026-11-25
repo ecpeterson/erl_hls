@@ -65,6 +65,17 @@
                 <option value="source">Changing driver</option>
               </select></label
             >
+            <label id="native-modes" hidden
+              >openXC7
+              <select id="native-geometry">
+                <option value="pins">Placed pins · estimated ns</option>
+                <option value="spans">Endpoint spans · estimated ns</option>
+                <option value="depth">Cell pairs · logic depth</option>
+              </select>
+            </label>
+            <label id="shared-scale" hidden
+              ><input type="checkbox" id="flow-shared" /> Shared ns scale</label
+            >
             <button id="flow-fit">Reset camera</button>
           </div>
         </div>
@@ -97,7 +108,7 @@
         <p class="caption">
           Lines show static connections between primitives selected by the
           clock’s activity. Drag to orbit both views. Scroll to zoom. Select a
-          line to inspect its endpoints. With keyboard focus, use the arrow keys
+          pin or line to inspect a connection. With keyboard focus, use the arrow keys
           to orbit and + or − to zoom.
         </p>
         <details>
@@ -118,9 +129,13 @@
             Vertical strokes show individual primitive timing arcs.
           </p>
           <p>
-            openXC7 lines connect placed endpoints. Height counts combinational
-            cell levels from a register or memory boundary. This implementation
-            has no completed route or measured within-clock delays.
+            openXC7 placement timing shows both ends of each modeled connection
+            and the delay through each primitive. Horizontal position is the
+            pin’s containing tile. Click a pin to see the other end, or choose
+            Endpoint spans for all schematic connections. nextpnr estimates net
+            delays from placement. Each axis fits its own implementation unless
+            Shared ns scale is selected. Cell pairs retains the synthesis-level
+            logic depth view. The full four-Phi openXC7 route is outstanding.
           </p>
         </details>
       </section>

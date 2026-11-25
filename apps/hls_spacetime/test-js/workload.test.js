@@ -43,3 +43,24 @@ test("routed flow keeps an unresolved branch distinct from direct and located br
   data.setUint32(0, 2, true);
   assert.throws(() => decode(routes), /endpoint/);
 });
+
+test("placement timing retains packed ports with unknown route geometry", () => {
+  const bytes = new Uint8Array(32);
+  const pins = Uint8Array.from([0, 0, 1, 0]);
+  const ports = [
+    ["Q", "A1"],
+    ["A1", "O6"],
+  ];
+  const model = decodeFlow(bytes, 2, undefined, 1, 8, pins, ports);
+  assert.equal(model.nets, 1);
+  assert.deepEqual(model.ports[model.pairs[1]], ["A1", "O6"]);
+  assert.equal(model.offsets, undefined);
+  assert.throws(
+    () => decodeFlow(bytes, 2, undefined, 3, 8, pins, ports),
+    /pin inventory/,
+  );
+  assert.throws(
+    () => decodeFlow(bytes, 2, undefined, 1, 8, pins, ports.slice(0, 1)),
+    /port pair/,
+  );
+});

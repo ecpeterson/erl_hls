@@ -7,7 +7,8 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-from flow import arrivals, vivado
+from flow import ROW, arrivals, vivado
+from placed_flow import placed_rows
 from init_bits import configured
 from scopes import links
 
@@ -39,6 +40,74 @@ class WorkloadTest(unittest.TestCase):
             self.assertAlmostEqual(nets[1][3], 0.17)
         with self.assertRaisesRegex(ValueError, "cycle"):
             arrivals([(1, 2, 1), (2, 1, 1)], {1: 0})
+
+    def test_placed_flow(self) -> None:
+        """Keep per-pin delay on a reconvergent sink and reject a missing or incorrectly joined branch."""
+
+        def packed(kind: str, inputs: dict, outputs: dict) -> dict:
+            """Build a scalar packed cell with distinct bit and direction records."""
+            return dict(
+                type=kind,
+                attributes={},
+                connections={p: [b] for p, b in (inputs | outputs).items()},
+                port_directions={
+                    **dict.fromkeys(inputs, "input"),
+                    **dict.fromkeys(outputs, "output"),
+                },
+            )
+
+        cells = {
+            "clock": packed("BUFGCTRL", {}, {"O": 1}),
+            "ff": packed("SLICE_FFX", {"CK": 1, "D": 5}, {"Q": 2}),
+            "slow": packed("SLICE_LUTX", {"A": 2}, {"O": 3}),
+            "join": packed("SLICE_LUTX", {"A": 2, "B": 3}, {"O": 5}),
+        }
+        signals = [
+            ("clock/O", "ff/CK", 5000),
+            ("ff/Q", "join/A", 80),
+            ("ff/Q", "slow/A", 200),
+            ("slow/O", "join/B", 200),
+            ("join/O", "ff/D", 50),
+        ]
+        gates = {
+            "clock": [],
+            "ff": [("CK", "Q", 100)],
+            "slow": [("A", "O", 1000)],
+            "join": [("A", "O", 50), ("B", "O", 80)],
+        }
+
+        def delay(tag: str, a: str, b: str, n: int) -> str:
+            """Emit one nextpnr delay record with equal rise and fall values in ps."""
+            return f"({tag} {a} {b} ({n}:{n}:{n}) ({n}:{n}:{n}))"
+
+        text = "\n".join(
+            [
+                "(TIMESCALE 1ps)",
+                '(CELLTYPE "top")',
+                "(INSTANCE )",
+                *(delay("INTERCONNECT", *v) for v in signals),
+            ]
+        )
+        for name, stages in gates.items():
+            text += f'\n(CELLTYPE "{cells[name]["type"]}")\n(INSTANCE {name})\n'
+            text += "\n".join(delay("IOPATH", *v) for v in stages)
+        with tempfile.TemporaryDirectory() as tmp:
+            sdf = Path(tmp) / "placed.sdf"
+            sdf.write_text(text)
+            design = dict(cells=cells, netnames={})
+            data, ports, _, stats = placed_rows(design, sdf, list(cells))
+            nets = list(ROW.iter_unpack(data))[: stats["timedConnections"]]
+            self.assertEqual(len(nets), 4)
+            self.assertAlmostEqual(nets[0][3], 0.18)
+            self.assertAlmostEqual(nets[-1][3], 1.63)
+            self.assertIn(("Q", "A"), ports)
+            for bad in (
+                text.replace("ff/Q join/A", "slow/O join/A"),
+                text.replace(delay("INTERCONNECT", *signals[1]), ""),
+            ):
+                sdf.write_text(bad)
+                with self.assertRaises(ValueError):
+                    placed_rows(design, sdf, list(cells))
 
     def test_effective_map(self) -> None:
         """Reject a run whose executable opened a different installation's technology map."""

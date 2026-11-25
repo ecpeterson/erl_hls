@@ -28,15 +28,25 @@ export function decodeFlow(bytes, cells, routes, count, tiles, pins, ports) {
       throw Error("Invalid flow endpoint or arrival");
     top = Math.max(top, b);
   }
-  if (!routes) return { data, rows, top };
-  if (count > rows || routes.length % 2 || pins.length !== rows * 2)
-    throw Error("Incomplete Vivado flow inventory");
+  if (!pins && !routes) return { data, rows, top };
+  if (
+    !Number.isInteger(count) ||
+    count < 0 ||
+    count > rows ||
+    pins?.length !== rows * 2
+  )
+    throw Error("Incomplete pin inventory");
+  const pairs = new Uint16Array(pins.buffer, pins.byteOffset, rows);
+  if (!ports || pairs.some((p) => p >= ports.length))
+    throw Error("Invalid flow port pair");
+  const model = { data, rows, top, pairs, ports, nets: count };
+  if (!routes) return model;
+  if (routes.length % 2) throw Error("Incomplete switch list");
   const words = new Uint16Array(
     routes.buffer,
     routes.byteOffset,
     routes.length / 2,
   );
-  const pairs = new Uint16Array(pins.buffer, pins.byteOffset, rows);
   const offsets = new Uint32Array(count);
   let at = 0;
   for (let i = 0; i < count; i++) {
@@ -48,9 +58,8 @@ export function decodeFlow(bytes, cells, routes, count, tiles, pins, ports) {
     for (let k = 0; k < n; k++)
       if (words[at++] >= tiles) throw Error("Invalid switch tile");
   }
-  if (at !== words.length || pairs.some((p) => p >= ports.length))
-    throw Error("Flow inventory mismatch");
-  return { data, rows, top, offsets, words, pairs, ports };
+  if (at !== words.length) throw Error("Flow inventory mismatch");
+  return { ...model, offsets, words };
 }
 
 /** Orthographic projection is affine; cache the four basis projections for these chip coordinates. */
@@ -81,7 +90,15 @@ export async function createFlow(replay, catalogs, asset) {
     y1 = Math.max(...ys);
   const height = 0.78 * Math.max(x1 - x0, y1 - y0);
   const bounds = { min: [x0, y0, -height], max: [x1, y1, 0] };
-  let camera, frame;
+  let camera, frame, current;
+  const mode = document.getElementById("native-geometry");
+  const shared = document.getElementById("flow-shared");
+  const estimate = replay.flow.openxc7.estimate;
+  if (estimate && estimate.checkpoint !== replay.checkpoints.openxc7)
+    throw Error("Placement timing belongs to a different checkpoint");
+  document.getElementById("native-modes").hidden = !estimate;
+  document.getElementById("shared-scale").hidden = !estimate;
+  if (!estimate) mode.value = "depth";
   await Promise.all(
     backends.map(async (b) => {
       const info = replay.flow[b],
@@ -101,6 +118,27 @@ export async function createFlow(replay, catalogs, asset) {
         pins,
         info.ports,
       );
+      let estimated;
+      if (b === "openxc7" && estimate) {
+        const [timed, pins] = await Promise.all([
+          asset(estimate.edges),
+          asset(estimate.pins),
+        ]);
+        estimated = decodeFlow(
+          timed,
+          catalogs[b].tile.length,
+          null,
+          estimate.timedConnections,
+          w * h,
+          pins,
+          estimate.ports,
+        );
+        if (
+          estimated.rows !==
+          estimate.timedConnections + estimate.timedCellArcs
+        )
+          throw Error("Incomplete placement timing inventory");
+      }
       const top =
         b === "vivado"
           ? Math.ceil(Math.max(model.top, replay.period) / 5) * 5
@@ -109,6 +147,9 @@ export async function createFlow(replay, catalogs, asset) {
         article,
         canvas: article.querySelector("canvas"),
         model,
+        base: model,
+        estimated,
+        baseTop: top,
         top,
         names: new TextDecoder().decode(names).split("\n"),
         paths: [],
@@ -135,10 +176,11 @@ export async function createFlow(replay, catalogs, asset) {
       m = p.model,
       tile = catalogs[b].tile;
     const t = [tile[a]];
-    const net = m.offsets && i < m.offsets.length;
-    const at = net ? m.offsets[i] : 0,
-      n = net ? m.words[at] : 0;
-    if (net && n !== 65535) {
+    const local = m.nets !== undefined && i >= m.nets;
+    const routed = !!m.offsets && !local;
+    const at = routed ? m.offsets[i] : 0,
+      n = routed ? m.words[at] : 0;
+    if (routed && n !== 65535) {
       for (let j = 0; j < n; j++)
         if (m.words[at + 1 + j] !== t.at(-1)) t.push(m.words[at + 1 + j]);
     }
@@ -163,14 +205,30 @@ export async function createFlow(replay, catalogs, asset) {
       start,
       end,
       points,
-      dash: net && n === 65535,
-      local: b === "vivado" && !net,
+      dash: !local && (!routed || n === 65535),
+      pinsOnly: b === "openxc7" && !local && mode.value === "pins",
+      local,
       switches: n === 65535 ? null : n,
     };
   }
 
   /** Join the one-clock known-change bits to both endpoints or to the driver alone. */
   function update(cycle, masks, filter) {
+    current = [cycle, masks, filter];
+    const timed = !!estimate && mode.value !== "depth";
+    shared.disabled = !timed;
+    const vendor = panels.vivado,
+      native = panels.openxc7;
+    native.model = timed ? native.estimated : native.base;
+    native.top = timed
+      ? 5 * Math.ceil(Math.max(native.model.top, replay.period) / 5)
+      : native.baseTop;
+    vendor.top = vendor.baseTop;
+    if (timed && shared.checked)
+      native.top = vendor.top = Math.max(native.top, vendor.top);
+    native.article.querySelector(".map-head span").textContent = timed
+      ? "Placement estimate · ns"
+      : "Placed · logic depth";
     for (const [index, b] of backends.entries()) {
       const p = panels[b],
         m = p.model,
@@ -212,12 +270,18 @@ export async function createFlow(replay, catalogs, asset) {
         format(nets) +
         (b === "vivado"
           ? " net connections · " + format(local) + " cell arcs"
-          : " connected cell pairs");
+          : timed
+            ? " estimated pin connections · " + format(local) + " cell arcs"
+            : " connected cell pairs");
       p.article.querySelector(".flow-selection").textContent =
         nets || local
           ? b === "vivado"
             ? "Switch tiles and primitive arcs · height in nanoseconds"
-            : "Endpoint connections · height in combinational levels"
+            : timed
+              ? mode.value === "pins"
+                ? "Select a placed pin to reveal its endpoint connection."
+                : "Dashed spans connect placed pins. Wire routes are unknown."
+              : "Schematic cell pairs · height in combinational levels"
           : "No connections match the activity filter at this clock.";
     }
     redraw();
@@ -268,20 +332,45 @@ export async function createFlow(replay, catalogs, asset) {
       ctx.fillStyle = on ? (b === "vivado" ? "#dba56d" : "#69bcba") : "#465a67";
       ctx.fillRect(x, y, on ? 2.3 : 1.15, on ? 2.3 : 1.15);
     }
+    // Bus-wide DSP arcs can share a tile and times. Retain their pin records and
+    // paint their common span once.
+    const localGeometry = new Map();
     function stroke(edge, selected) {
+      if (b === "openxc7" && edge.local && !selected) {
+        const key =
+          catalogs[b].tile[edge.a] + "/" + edge.start + "/" + edge.end;
+        const existing = localGeometry.get(key);
+        if (existing) {
+          edge.screen = existing;
+          return;
+        }
+        edge.screen = edge.points.map((q) => xy(...q));
+        localGeometry.set(key, edge.screen);
+      } else edge.screen = edge.points.map((q) => xy(...q));
       const late = Math.min(1, edge.end / p.top);
       ctx.strokeStyle = selected
         ? "#ffffff"
         : edge.local
-          ? "#ffe2b0"
+          ? b === "vivado"
+            ? "#ffe2b0"
+            : "#a0f4e1"
           : b === "vivado"
             ? `hsl(${39 - 24 * late} 92% ${64 - 8 * late}%)`
             : `hsl(${172 + 31 * late} 71% ${66 - 8 * late}%)`;
       ctx.globalAlpha = selected ? 1 : edge.local ? 0.58 : 0.75;
       ctx.lineWidth = selected ? 3.4 : edge.local ? 1.05 : 1.25;
+      if (
+        edge.pinsOnly ||
+        (b === "openxc7" && edge.dash && mode.value === "spans")
+      ) {
+        ctx.fillStyle = ctx.strokeStyle;
+        for (const [x, y] of edge.screen)
+          ctx.fillRect(x - 1.15, y - 1.15, 2.3, 2.3);
+        if (edge.pinsOnly && !selected) return;
+        if (!selected) ctx.globalAlpha = 0.28;
+      }
       ctx.setLineDash(edge.dash ? [2.5, 2.5] : []);
       ctx.beginPath();
-      edge.screen = edge.points.map((q) => xy(...q));
       edge.screen.forEach(([x, y], i) =>
         i ? ctx.lineTo(x, y) : ctx.moveTo(x, y),
       );
@@ -310,7 +399,7 @@ export async function createFlow(replay, catalogs, asset) {
       const [x, y] = xy(...left, (-height * i) / ticks);
       line([x - 4, y], [x, y]);
       ctx.fillText(
-        +((p.top * i) / ticks).toFixed(2) + (b === "vivado" ? " ns" : ""),
+        +((p.top * i) / ticks).toFixed(2) + (p.model.pairs ? " ns" : ""),
         x - 6,
         y,
       );
@@ -335,6 +424,16 @@ export async function createFlow(replay, catalogs, asset) {
     for (const edge of p.paths) {
       const points = edge.screen;
       if (!points) continue;
+      if (edge.pinsOnly) {
+        for (const [px, py] of points) {
+          const distance = (px - x) ** 2 + (py - y) ** 2;
+          if (distance < best) {
+            best = distance;
+            found = edge;
+          }
+        }
+        continue;
+      }
       for (let i = 1; i < points.length; i++) {
         const [ax, ay] = points[i - 1],
           dx = points[i][0] - ax,
@@ -357,20 +456,22 @@ export async function createFlow(replay, catalogs, asset) {
     p.selection = found;
     const { a, d, i, start, end } = found;
     const pair = p.model.pairs && p.model.ports[p.model.pairs[i]];
-    const timing =
-      b === "vivado"
-        ? start.toFixed(3) +
-          " → " +
-          end.toFixed(3) +
-          " ns · " +
-          (found.local
-            ? "primitive arc"
-            : found.dash
-              ? "endpoint span"
-              : found.switches
-                ? found.switches + " switch-tile visits"
-                : "direct connection")
-        : "Depth " + start + " → " + end;
+    const timing = p.model.pairs
+      ? (b === "openxc7" ? "Estimated " : "") +
+        start.toFixed(3) +
+        " → " +
+        end.toFixed(3) +
+        " ns · " +
+        (found.local
+          ? "primitive arc"
+          : found.dash
+            ? b === "openxc7"
+              ? "unrouted endpoint span"
+              : "endpoint span"
+            : found.switches
+              ? found.switches + " switch-tile visits"
+              : "direct connection")
+      : "Depth " + start + " → " + end;
     p.article.querySelector(".flow-selection").textContent =
       timing +
       " · " +
@@ -426,6 +527,9 @@ export async function createFlow(replay, catalogs, asset) {
       redraw();
     };
   }
+  mode.onchange = shared.onchange = () => {
+    if (current) update(...current);
+  };
   fit();
   document.getElementById("flow-fit").onclick = () => {
     fit();

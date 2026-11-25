@@ -130,7 +130,7 @@ Choose **3D signal flow** in the paired gallery. Opening `workload.html?view=flo
 
 Vivado height uses maximum SDF arc delays, accumulated from a local launch clock pin through each reachable input and output. Bus-wide arcs expand over connected lanes. A net rises by its own interconnect delay. Switch-tile heights interpolate that delay along the retained directed branch. Of 273,350 non-launch-clock connections, 273,349 have a clock-launched arrival. Of those, 259,525 resolve through used PIPs, 3,963 have a direct connection and 9,861 retain dashed endpoint spans. All 2,823 consecutive net pin pairs across the 100 saved slow setup paths appear in the gallery, including repeated occurrences. Cell arcs use their individual delays. These structural arrival envelopes omit clock skew, timing exceptions and input sensitization.
 
-openXC7 shows 234,038 placed driver/sink cell pairs reachable from clocked boundaries. Its vertical axis counts combinational cells along the longest structural chain. Pairs collapse multiple pins on the same two cells. At C32 the default filter shows 4,565 Vivado net connections and 22,087 primitive arcs alongside 2,780 openXC7 pairs. The route and delay of the full native implementation remain open under G4.4b. [Flow evidence ledger](../../yap/hls_spacetime/g44-four-phi-flow.json)
+The original openXC7 logic-depth view shows 234,038 placed driver/sink cell pairs reachable from clocked boundaries. Its vertical axis counts combinational cells along the longest structural chain. Pairs collapse multiple pins on the same two cells. At C32 the default filter shows 4,565 Vivado net connections and 22,087 primitive arcs alongside 2,780 openXC7 pairs. The route and delay of the full native implementation remain open under G4.4b. [Flow evidence ledger](../../yap/hls_spacetime/g44-four-phi-flow.json)
 
 Serve `runs/spacetime-g4-parity-2026-11-24/four-phi-flow/gallery` from the artifact archive to use both the flow and placement views. To reproduce the flow sidecars from the paired replay, use its `RAPIDWRIGHT_PATH`, the JDK 21 executable, the same physical device database and the archived checkpoint's readable EDIF. Run under the preceding serial process-group guard with a fresh output directory.
 
@@ -139,6 +139,27 @@ python3 "$workload/flow.py" --gallery "$PAIRED" --run "$RUN" --archive "$REFEREN
   --edif "$WORK/vendor.edf" --java "$JAVA" --jar "$RAPIDWRIGHT_JAR" --chipdb "$CHIPDB" --output "$FLOW"
 npm --prefix apps/hls_spacetime start -- --data "$FLOW"
 ```
+
+### openXC7 placement timing
+
+The 3D view in the enriched four-Phi gallery opens on placed pins. nextpnr writes SDF from the same placement with packing, placement and routing disabled. The exporter checks the router, device database and checkpoint hashes, matches every driven packed input to its unique driver, and propagates from clock pins through modeled primitive arcs. Each connection uses its own predicted interconnect delay. An input stops at its own arrival even if a different input reaches the same cell later. The vertical scale is nanoseconds. Tick **Shared ns scale** to compare heights directly.
+
+Pins use their placed tile coordinates. Local strokes show cell delays. Picking a pin reveals one schematic connection, and **Endpoint spans** draws all of them as dashed lines. **Cell pairs** restores logic depth, including connections without qualified timing. The placement contains 85,828 net records and zero bound switch lists. Neither the endpoint spans nor the placement estimates establish the wires used by a completed route.
+
+Across the design, 204,760 packed pin connections and 364,736 primitive arcs have both clock-launched estimates and observed cells at both ends. At C32, the activity filter selects 3,484 connections and 64,664 primitive arcs. Bus-wide DSP timing can produce many coincident arcs. Cell-level activity cannot distinguish which bit propagated. The old C32 view drew 1,152 connections across multiple logic levels, with a maximum jump of 30. Along the ten-cell scheduler bit-84 path from RAM output `DOADO11` to DSP input `A7`, the nine modeled cell arcs sum to 4.002 ns and the nine predicted net increments sum to 11.565 ns. This is a structural estimate for that path. [Placement timing evidence and coverage](../../yap/hls_spacetime/g44-four-phi-placement-timing.json)
+
+Serve `runs/spacetime-g4-parity-2026-11-24/four-phi-placement-timing/gallery` from the project artifact archive. To reproduce from the flow gallery above, run under the same process-group guard.
+
+```sh
+python3 "$workload/placed_flow.py" --gallery "$FLOW" --run "$RUN" --router "$NEXTPNR_SPACETIME" --chipdb "$CHIPDB" --output "$PLACED_FLOW"
+npm --prefix apps/hls_spacetime start -- --data "$PLACED_FLOW"
+```
+
+#### Four-Phi routed parity campaign
+
+1. **Obtain a legal native route.** Try the corrected two-stage core/harness mapping on the archived RTL at 20 ns with the recorded part, pins and seed. Retain the map actually loaded, resource counts, congestion log, checkpoint and route status. The earlier stock-map run exhausted its one-hour bound with 2,120 overused wires. Preserve the result of each bounded attempt.
+2. **Bind the replay to that implementation.** Match packed pins, placement and simulated primitives to the routed checkpoint. Repeat the 4,096-clock replay and the public capture-lane checks if synthesis changes. Establish correspondence of the C32–C37 RAM transaction before attaching any route or timing to the comparison.
+3. **Qualify and expand the physical view.** Trace used switches to each sink on scheduler bit 84 first, including the inserted carry-input LUT and any packed LUT input permutation. Check the native model and timing provenance at each hop, then export the whole design. Report routed, direct, predicted and unresolved branches separately for the whole design and for C32. Registered hard-block timing and per-output-bit switching each need their own witnesses.
 
 ## Remaining work
 
