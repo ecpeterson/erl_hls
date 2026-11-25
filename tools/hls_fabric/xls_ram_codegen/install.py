@@ -41,7 +41,7 @@ def replace(destination: Path, asset: Path, pin: dict) -> None:
 
 
 def main() -> None:
-    """Fetch the private build with GitHub CLI authentication; never compile in CI."""
+    """Install the verified code generator from its GitHub release or a supplied archive."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('xls', type=Path)
     parser.add_argument('--asset', type=Path, help='use an already downloaded archive')
