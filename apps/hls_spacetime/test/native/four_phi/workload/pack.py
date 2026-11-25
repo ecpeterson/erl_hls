@@ -159,7 +159,7 @@ def placement(run: Path, work: Path, backend: str) -> tuple[dict, dict, dict]:
                 require(kind == "FDRE", "handshake register type")
                 lanes[(2 if m[1] == "valid_capture" else 3, int(m[2]))] = name
         for name, props in properties(
-            (run / VENDOR / "hard-primitives.rpt").read_text()
+            (run / "hard-primitives.rpt").read_text()
         ).items():
             require(
                 placed[name] == (props["REF_NAME"], props["LOC"]),
@@ -249,7 +249,8 @@ def mapped(
         "enabled plane capture registers",
     )
     require(
-        {(3, i) for i in range(4)} | {(2, 1 - "XZ".index(side)) for side in planes}
+        {(3, i) for side in planes for i in ((0, 1) if side == "X" else (2, 3))}
+        | {(2, 1 - "XZ".index(side)) for side in planes}
         <= {(p, b) for p, b, _ in checks},
         "qualified valid and ready registers",
     )
@@ -379,7 +380,10 @@ def build_gallery(
         grid = ChipGrid(db)
         require(grid.part == receipt["part"] == "xc7z030sbg485-1", "chipdb part")
         backends = {
-            b: mapped(run, work, out, b, grid, expected) for b in ("vivado", "openxc7")
+            b: mapped(
+                run / VENDOR if b == "vivado" else run, work, out, b, grid, expected
+            )
+            for b in ("vivado", "openxc7")
         }
         tiles = {
             i: grid.tile_names[i] for b in backends.values() for i, _ in b["occupancy"]

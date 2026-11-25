@@ -88,7 +88,7 @@
     }
   ],
   "twoWorkerWitness": {
-    "topology": "2 × 1 X plane, one shard, two Phi workers and two syndrome actors",
+    "topology": "2 \u00d7 1 X plane, one shard, two Phi workers and two syndrome actors",
     "nativeOnly": true,
     "captureSha256": "5ed550a5bbc34a5517bcb5c8a72794f73ac9da71418506ac35bbcaad1f19e580",
     "observationReceiptSha256": "0e2fada3936d85d35f18585f3a48443eb4cd4e052636c88efccbca26f70a983b",
@@ -277,5 +277,189 @@
     "archive": "runs/spacetime-g4-parity-2026-11-24/two-phi-routed",
     "galleryManifestSha256": "ea56edd2c024ef8534655c9433b697d2a06bc4d2833c5a6cb6850821f64f1db4",
     "inventorySha256": "35a8b229beeb23efa9618bbc40c8c8a82d8ca58b6dc4987d37ed005f4d51327a"
+  },
+  "pairedTwoWorkerWitness": {
+    "scope": "Same two X workers, 2 x 1, one scheduler shard, 4,096 rising edges, no timing annotation during functional replay.",
+    "part": "xc7z030sbg485-1",
+    "periodNs": 20,
+    "checkpoints": {
+      "openxc7": "acc4e94d967c7745174aca6113a633e9f5a1c732c3d27f27e5c68597c3f1ac07",
+      "vivado": "cf472bce3b89334701cf5fba28b144eb5e41d2ba000da8906d0715dc3410efdc"
+    },
+    "nativeCaptureSha256": "5ed550a5bbc34a5517bcb5c8a72794f73ac9da71418506ac35bbcaad1f19e580",
+    "vivadoInputManifestSha256": "57b0a586039ce58a4868d024554824052186abded7cc90250de84fad1475bc73",
+    "vivadoSdfSha256": "b20d7716baeeae189ef859850fbd9daef58dda76fd1c32110bc5491aa1651da2",
+    "benchSha256": "9289d39c90ca4c19f88268ee4738d72833334da2de16e32f4082989fa586dda9",
+    "observerSha256": "66339baca5ca10af64380682466da81e7f5e82ced31a59201a50536dd645a293",
+    "functionalModelsSha256": "de97e2b21318aa2dd4185a1f9d808a44c30be594efbaeabe5fbe23d1b89d1d10",
+    "vivadoRoute": {
+      "version": "Vivado 2024.2 build 5239630",
+      "routableNets": 22711,
+      "fullyRoutedNets": 22711,
+      "routingErrors": 0,
+      "setupSlackNs": 5.588,
+      "holdSlackNs": 0.052,
+      "wallSeconds": 221.57,
+      "peakProcessGroupBytes": 2831097856
+    },
+    "acceptedFrames": {
+      "X": {
+        "status": 36,
+        "corrections": 6
+      }
+    },
+    "frameCheck": "RTL frame acceptance and content, mapped harness digest, retained capture lanes, valid and ready source registers checked on all clocks. The vendor retained 102 X data lanes.",
+    "physical": {
+      "vivado": {
+        "cells": 29059,
+        "capture": [
+          102,
+          0
+        ],
+        "control": 3,
+        "IOPATH": 86005,
+        "INTERCONNECT": 122388,
+        "dataConnections": 108836,
+        "timedConnections": 108835,
+        "localSpans": 92938,
+        "clockPins": 13552,
+        "unresolved": 7533,
+        "pipBranches": 100094,
+        "direct": 1208,
+        "everChanged": 8766
+      },
+      "openxc7": {
+        "cells": 28419,
+        "capture": [
+          128,
+          128
+        ],
+        "control": 6,
+        "clockLoads": 13895,
+        "reportedCellArcs": 277007,
+        "placedNetRecords": 34982,
+        "clockPins": 13879,
+        "nonclockConnections": 113931,
+        "usedCellArcs": 120020,
+        "unreachedConnections": 8725,
+        "timedConnections": 100758,
+        "unobservedConnections": 4448,
+        "unreachedCellArcs": 31484,
+        "timedCellArcs": 87142,
+        "unobservedCellArcs": 1394,
+        "everChanged": 8280
+      }
+    },
+    "cycles": {
+      "0": {
+        "vivado": [
+          0,
+          0
+        ],
+        "openxc7": [
+          0,
+          0
+        ]
+      },
+      "32": {
+        "vivado": [
+          26,
+          117
+        ],
+        "openxc7": [
+          61,
+          101
+        ]
+      },
+      "89": {
+        "vivado": [
+          96,
+          596
+        ],
+        "openxc7": [
+          101,
+          484
+        ]
+      },
+      "90": {
+        "vivado": [
+          1077,
+          6202
+        ],
+        "openxc7": [
+          919,
+          7024
+        ]
+      },
+      "237": {
+        "vivado": [
+          271,
+          719
+        ],
+        "openxc7": [
+          308,
+          818
+        ]
+      },
+      "3640": {
+        "vivado": [
+          2707,
+          10173
+        ],
+        "openxc7": [
+          2211,
+          10340
+        ]
+      }
+    },
+    "cycleColumns": [
+      "active data connections",
+      "active primitive arcs"
+    ],
+    "vivadoBit84": {
+      "ram": {
+        "ns": 2.8086,
+        "visits": 5,
+        "missing": 1
+      },
+      "dsp": {
+        "ns": 3.2927,
+        "visits": 21,
+        "missing": 0
+      },
+      "probes": {
+        "ram": [
+          "decoder/scheduler_1_state/memory_reg_1",
+          "DOADO[12]"
+        ],
+        "dsp": [
+          "decoder/application/__phi_decoder_profile_topology__SchedulerGrid_0_next_inst/__phi_halo_cell__SharedService_0__2_1_0_2_2_next_inst/__phi_halo_cell__SharedExecutor_0_next_inst/smul42b_25b_x_17b_return",
+          "A[9]"
+        ],
+        "q": [
+          "decoder/application/__phi_decoder_profile_topology__SchedulerGrid_0_next_inst/__phi_halo_cell__SharedService_0__2_1_0_2_2_next_inst/__phi_halo_cell__SharedLoader_0__1_8_next_inst/____state_17_reg[84]",
+          "Q"
+        ]
+      },
+      "knownRamClocks": 4085,
+      "transitions": {
+        "ram": 262,
+        "q": 410,
+        "dsp": 402
+      },
+      "c89": [
+        "ram"
+      ],
+      "c90": [
+        "ram",
+        "q",
+        "dsp"
+      ]
+    },
+    "geometryUnits": "Vivado collapses consecutive PIPs in one tile. openXC7 counts switch visits. Both time axes interpolate delay between pins.",
+    "archive": "runs/spacetime-g4-parity-2026-11-24/two-phi-paired",
+    "inventorySha256": "1c3028828ad6526db7f7578c15d450129fc0be28ad72e48b7157b23c5df4b552",
+    "galleryManifestSha256": "266a1de139dbee2ffedb2f1188f92837d404fcc206b485da1072b3b9709ad915",
+    "browserWitness": "Both 3D panels, per-clock changes, both register stages, per-pin changes, common time scale, 2D navigation and 390 px mobile layout."
   }
 }

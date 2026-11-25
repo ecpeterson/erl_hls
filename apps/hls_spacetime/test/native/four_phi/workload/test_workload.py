@@ -11,9 +11,10 @@ from flow import ROW, arrivals, vivado
 from placed_flow import placed_rows
 from routed_flow import route_result, trace
 from openxc7_tree import RouteTree
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 from init_bits import configured
 from scopes import links
+import vivado_lane
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
@@ -22,6 +23,32 @@ from capture import check_mapping_log
 
 class WorkloadTest(unittest.TestCase):
     """Run small witnesses independently of the archived decoder and device databases."""
+
+    def test_registered_state_lane(self) -> None:
+        """Check reset priority, disabled captures and known adjacent pin changes across the register."""
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.object(vivado_lane, "CYCLES", 4),
+        ):
+            root = Path(directory)
+            vendor = root / "vivado-sim-guard"
+            native = root / "rtl-sim-guard"
+            vendor.mkdir()
+            native.mkdir()
+            log = vendor / "console.log"
+            states = "STATE 0 x 1 1 1 0 0\nSTATE 1 0 1 1 0 1 1\nSTATE 2 1 0 0 0 1 1\nSTATE 3 0 1 1 1 0 0\n"
+            log.write_text(states)
+            (native / "console.log").write_text(
+                "LANE 0 x\nLANE 1 0\nLANE 2 1\nLANE 3 0\n"
+            )
+            observed = vivado_lane.changes(root, root)
+            self.assertEqual(observed["knownRamClocks"], 3)
+            self.assertEqual(
+                observed["transitions"], {"ram": [2, 3], "q": [1, 3], "dsp": [1, 3]}
+            )
+            log.write_text(states.replace("STATE 2 1 0 0 0 1", "STATE 2 1 0 0 0 0"))
+            with self.assertRaisesRegex(ValueError, "FDRE capture at C2"):
+                vivado_lane.changes(root, root)
 
     def test_clock_to_pin_flow(self) -> None:
         """Use the launch pin as time zero and propagate only connected scalar bus lanes."""

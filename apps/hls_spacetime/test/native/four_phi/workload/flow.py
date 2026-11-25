@@ -156,6 +156,73 @@ def inventory(gallery, ref):
     return gzip.decompress(p.read_bytes()).decode().splitlines()
 
 
+def vendor_model(
+    sdf: Path,
+    dcp: Path,
+    edif: Path,
+    java: Path,
+    jar: Path,
+    names: list[str],
+    grid: ChipGrid,
+    stage: Path,
+    gallery: Path,
+    *,
+    timing: tuple | None = None,
+) -> dict:
+    """Export timed arcs and sink-specific switch tiles in the replay's primitive order."""
+    nets, logic, vendor = timing if timing is not None else vivado(sdf, names)
+    queries, traces = stage / "pins.tsv", stage / "branches.txt"
+    with queries.open("w") as f:
+        for (a, ap), (b, bp), _, _ in nets:
+            print(names[a], ap, names[b], bp, sep="\t", file=f)
+    subprocess.run(
+        [
+            str(java),
+            "-Xmx3g",
+            "-cp",
+            str(jar),
+            str(Path(__file__).with_name("FlowRoutes.java")),
+            str(dcp),
+            str(edif),
+            str(queries),
+            str(traces),
+        ],
+        check=True,
+    )
+    geometry, rows, coverage = bytearray(), bytearray(), Counter()
+    require(grid.count < 65535, "tile index width")
+    with traces.open() as f:
+        for ((a, _), (b, _), start, end), line in zip(nets, f, strict=True):
+            route = line.strip()
+            mapped = route != "?"
+            tiles = (
+                [] if route in {"?", "="} else [grid.owners[t] for t in route.split()]
+            )
+            coverage[
+                "pipBranches" if tiles else "direct" if mapped else "unresolved"
+            ] += 1
+            rows.extend(ROW.pack(a, b, start, end))
+            geometry.extend(struct.pack("<H", len(tiles) if mapped else 65535))
+            geometry.extend(struct.pack(f"<{len(tiles)}H", *tiles))
+    vendor.update(coverage)
+    for (a, _), (b, _), start, end in logic:
+        rows.extend(ROW.pack(a, b, start, end))
+    ports, pin_ids = {}, bytearray()
+    for records in (nets, logic):
+        for (_, ap), (_, bp), _, _ in records:
+            pair = ap, bp
+            if pair not in ports:
+                ports[pair] = len(ports)
+            pin_ids.extend(struct.pack("<H", ports[pair]))
+    vendor.update(
+        ports=list(ports),
+        pins=asset(gallery, "vivado-flow-pins", pin_ids),
+        edges=asset(gallery, "vivado-flow", rows),
+        routes=asset(gallery, "vivado-switches", geometry),
+    )
+    return vendor
+
+
 def build(args, stage):
     """Join bounded local tool outputs and publish a complete copy only after all inputs agree."""
     live = json.loads((args.gallery / "workload.json").read_text())
@@ -190,63 +257,15 @@ def build(args, stage):
     gallery = stage / "gallery"
     shutil.copytree(args.gallery, gallery)
     names = inventory(gallery, live["backends"]["vivado"]["names"])
-    nets, logic, vendor = vivado(sdf, names)
-    queries, traces = stage / "pins.tsv", stage / "branches.txt"
-    with queries.open("w") as f:
-        for (a, ap), (b, bp), _, _ in nets:
-            print(names[a], ap, names[b], bp, sep="\t", file=f)
-    subprocess.run(
-        [
-            str(args.java),
-            "-Xmx3g",
-            "-cp",
-            str(args.jar),
-            str(Path(__file__).with_name("FlowRoutes.java")),
-            str(dcp),
-            str(args.edif),
-            str(queries),
-            str(traces),
-        ],
-        check=True,
-    )
-    geometry, rows, coverage = bytearray(), bytearray(), Counter()
     with (
         args.chipdb.open("rb") as f,
         mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as db,
     ):
         grid = ChipGrid(db)
-        require(grid.count < 65535 and grid.width == live["width"], "tile index width")
-        with traces.open() as f:
-            for ((a, _), (b, _), start, end), line in zip(nets, f, strict=True):
-                route = line.strip()
-                mapped = route != "?"
-                tiles = (
-                    []
-                    if route in {"?", "="}
-                    else [grid.owners[t] for t in route.split()]
-                )
-                coverage[
-                    "pipBranches" if tiles else "direct" if mapped else "unresolved"
-                ] += 1
-                rows.extend(ROW.pack(a, b, start, end))
-                geometry.extend(struct.pack("<H", len(tiles) if mapped else 65535))
-                geometry.extend(struct.pack(f"<{len(tiles)}H", *tiles))
-    vendor.update(coverage)
-    for (a, _), (b, _), start, end in logic:
-        rows.extend(ROW.pack(a, b, start, end))
-    ports, pin_ids = {}, bytearray()
-    for records in (nets, logic):
-        for (_, ap), (_, bp), _, _ in records:
-            pair = ap, bp
-            if pair not in ports:
-                ports[pair] = len(ports)
-            pin_ids.extend(struct.pack("<H", ports[pair]))
-    vendor.update(
-        ports=list(ports),
-        pins=asset(gallery, "vivado-flow-pins", pin_ids),
-        edges=asset(gallery, "vivado-flow", rows),
-        routes=asset(gallery, "vivado-switches", geometry),
-    )
+        require(grid.width == live["width"], "tile grid width")
+        vendor = vendor_model(
+            sdf, dcp, args.edif, args.java, args.jar, names, grid, stage, gallery
+        )
     native_rows, xc7 = native(
         synth, inventory(gallery, live["backends"]["openxc7"]["names"])
     )

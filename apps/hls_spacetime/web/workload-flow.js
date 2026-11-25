@@ -112,7 +112,8 @@ export async function createFlow(replay, catalogs, asset) {
     document.getElementById("native-flow-guide").textContent =
       "openXC7 lines follow each sink’s switch tiles on the routed checkpoint. Select a line for its pins and delay source. Height accumulates nextpnr’s post-route SDF, including placement estimates for permuted LUT inputs.";
   }
-  if (replay.selectedPath && routed && backends.length === 1) {
+  const vendorLane = replay.flow.vivado?.stateLane;
+  if (replay.selectedPath && routed && (backends.length === 1 || vendorLane)) {
     const filter = document.getElementById("flow-filter");
     filter.add(new Option("State RAM → capture D", "ram-stage"));
     filter.add(new Option("Capture Q → DSP input", "dsp-stage"));
@@ -292,8 +293,13 @@ export async function createFlow(replay, catalogs, asset) {
         : "Capture clock → DSP operand";
     panel.article.querySelector(".stat").textContent =
       name + " · " + ns.toFixed(3) + " ns · " + visits + " switch visits";
+    stageActivity(panel, cycle, replay.selectedPath.transitions);
+  }
+
+  /** Report only observed known-to-known changes at the three individually sampled pins. */
+  function stageActivity(panel, cycle, transitions) {
     const labels = { ram: "RAM output", q: "capture Q", dsp: "DSP operand" };
-    const changed = Object.entries(replay.selectedPath.transitions)
+    const changed = Object.entries(transitions)
       .filter(([, clocks]) => clocks.includes(cycle))
       .map(([pin]) => labels[pin]);
     panel.article.querySelector(".flow-selection").textContent =
@@ -337,6 +343,44 @@ export async function createFlow(replay, catalogs, asset) {
     };
   }
 
+  /** Draw one Vivado clock segment from the indexed SDF arcs and its own routed switch list. */
+  function showVendorStage(panel, rows, cycle) {
+    const m = panel.model;
+    let elapsed = 0,
+      visits = 0,
+      missing = 0;
+    const delays = rows.map(
+      (i) =>
+        m.data.getFloat32(i * 16 + 12, true) -
+        m.data.getFloat32(i * 16 + 8, true),
+    );
+    panel.top = Math.max(1, Math.ceil(delays.reduce((a, b) => a + b, 0)));
+    for (const [j, i] of rows.entries()) {
+      const a = m.data.getUint32(i * 16, true),
+        d = m.data.getUint32(i * 16 + 4, true);
+      const edge = path("vivado", i, a, d, elapsed, elapsed + delays[j]);
+      panel.active.add(catalogs.vivado.tile[a]);
+      panel.active.add(catalogs.vivado.tile[d]);
+      if (!edge.local && edge.dash) missing++;
+      visits += edge.switches ?? 0;
+      panel.paths.push(edge);
+      elapsed += delays[j];
+    }
+    const name =
+      rows === vendorLane.segments[0]
+        ? "RAM clock → capture D"
+        : "Capture clock → DSP operand";
+    panel.article.querySelector(".stat").textContent =
+      name +
+      " · " +
+      elapsed.toFixed(3) +
+      " ns · " +
+      visits +
+      " switch-tile visits" +
+      (missing ? ` · ${missing} unresolved branch${missing === 1 ? "" : "es"}` : "");
+    stageActivity(panel, cycle, vendorLane.transitions);
+  }
+
   /** Join the one-clock known-change bits to both endpoints or to the driver alone. */
   function update(cycle, masks, filter) {
     current = [cycle, masks, filter];
@@ -353,7 +397,7 @@ export async function createFlow(replay, catalogs, asset) {
       : native.baseTop;
     if (vendor) {
       vendor.top = vendor.baseTop;
-      if (timed && shared.checked)
+      if (timed && !stage && shared.checked)
         native.top = vendor.top = Math.max(native.top, vendor.top);
     }
     native.article.querySelector(".map-head span").textContent = timed
@@ -370,7 +414,13 @@ export async function createFlow(replay, catalogs, asset) {
       p.paths = [];
       p.selection = null;
       if (stage) {
-        showStage(p, filter, cycle);
+        if (b === "vivado")
+          showVendorStage(
+            p,
+            vendorLane.segments[filter === "ram-stage" ? 0 : 1],
+            cycle,
+          );
+        else showStage(p, filter, cycle);
         continue;
       }
       for (let i = 0; i < tile.length; i++)
@@ -423,6 +473,14 @@ export async function createFlow(replay, catalogs, asset) {
                 : "Dashed spans connect placed pins. Wire routes are unknown."
               : "Schematic cell pairs · height in combinational levels"
           : "No connections match the activity filter at this clock.";
+    }
+    if (stage && vendor && shared.checked) {
+      const top = Math.max(native.top, vendor.top);
+      for (const panel of [native, vendor]) {
+        for (const edge of panel.paths)
+          for (const point of edge.points) point[2] *= panel.top / top;
+        panel.top = top;
+      }
     }
     redraw();
   }

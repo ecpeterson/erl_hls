@@ -1,0 +1,62 @@
+{
+  "variableTaps": {
+    "srl16e": {
+      "clocks": 512,
+      "tapAddresses": 16,
+      "shiftClocks": 246,
+      "holdClocks": 266,
+      "outputTransitions": 204,
+      "routedNets": 14,
+      "routingErrors": 0
+    },
+    "srlc32e": {
+      "clocks": 512,
+      "tapAddresses": 32,
+      "shiftClocks": 246,
+      "holdClocks": 266,
+      "outputTransitions": 217,
+      "routedNets": 14,
+      "routingErrors": 0
+    }
+  },
+  "endpointExports": {
+    "two": {
+      "dcp": "cf472bce3b89334701cf5fba28b144eb5e41d2ba000da8906d0715dc3410efdc",
+      "querySha256": "aa28eb9a91261a5e88561be579f311ec0a67fea6aa2b4ea305d3664467ff12ad",
+      "branches": 7533,
+      "uniquePins": 14912,
+      "exactPins": 14912,
+      "withBel": 14912,
+      "withSitePin": 269,
+      "nets": 7379,
+      "resultSha256": "2bb0ae9494a48e394a629a9494da17b8eb1768a9daed9286cca413a84a45d343",
+      "unresolvedBranchStatus": {
+        "INTRASITE": 7293,
+        "ROUTED": 240
+      },
+      "uniqueNetStatus": {
+        "INTRASITE": 7293,
+        "ROUTED": 86
+      }
+    },
+    "four": {
+      "dcp": "4a5ced3b1d12429c641c0b679f12e44005ed02a552ea547b2fd86359de94801d",
+      "querySha256": "6ccd87964c0ac5436be5c28eac8af75b2b47935d538b4f51a5abb24b58ef00f3",
+      "branches": 9861,
+      "uniquePins": 19157,
+      "exactPins": 19157,
+      "withBel": 19157,
+      "withSitePin": 1665,
+      "nets": 9296,
+      "resultSha256": "8b5a59c10c3d395c7ae5f5635f37cb5f09ecca5ca790accffe05b05804ee2219",
+      "unresolvedBranchStatus": {
+        "INTRASITE": 8371,
+        "ROUTED": 1490
+      },
+      "uniqueNetStatus": {
+        "INTRASITE": 8371,
+        "ROUTED": 925
+      }
+    }
+  }
+}

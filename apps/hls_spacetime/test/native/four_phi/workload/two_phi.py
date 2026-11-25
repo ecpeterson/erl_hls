@@ -103,8 +103,8 @@ def pin_changes(work: Path, top: dict, path: dict) -> dict:
     return changes
 
 
-def build(run: Path, work: Path, chipdb: Path, constids: Path, out: Path) -> None:
-    """Authenticate the technology map and pin observations before exporting either clock segment."""
+def build(run: Path, work: Path, chipdb: Path, constids: Path, out: Path) -> list:
+    """Export the native witness and return its cycle-by-cycle reference for a matched replay."""
     receipt = json.loads((run / "capture.json").read_bytes())
     measured = json.loads((work / "bound-measurement.json").read_bytes())
     require(
@@ -194,6 +194,7 @@ def build(run: Path, work: Path, chipdb: Path, constids: Path, out: Path) -> Non
     )
     (out / "workload.json").write_text(json.dumps(replay, separators=(",", ":")) + "\n")
     (out / "index.json").write_text(json.dumps(dict(workload="two-phi", flow=1)) + "\n")
+    return expected
 
 
 def publish(run: Path, work: Path, chipdb: Path, constids: Path, output: Path) -> None:

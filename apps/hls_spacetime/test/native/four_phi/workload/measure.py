@@ -6,6 +6,7 @@ import json
 import os
 import subprocess
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 from execution import digest, require
@@ -33,6 +34,100 @@ def observations(work: Path) -> dict[str, str]:
     return {name: digest(work / name) for name in names}
 
 
+def check_models(models: Path) -> None:
+    """Check the complete UNISIM functional model set before compiling a replay."""
+    model_set = hashlib.sha256()
+    for model in [models / "glbl.v", *sorted((models / "unisims").glob("*.v"))]:
+        model_set.update(
+            str(model.relative_to(models)).encode()
+            + b"\0"
+            + bytes.fromhex(digest(model))
+        )
+    require(model_set.hexdigest() == UNISIM, "UNISIM release")
+
+
+def vendor_netlist(
+    vendor: Path, work: Path, yosys: Path, jar: Path, java: str, stage: Callable
+) -> None:
+    """Recover simulation logic and DCP cell locations from the same routed vendor capture."""
+    net = (vendor / "routed.v").read_text()
+    logic, sep, _ = net.partition("`ifndef GLBL")
+    require(
+        bool(sep) and logic.count("`define XIL_TIMING") == 1,
+        "archived functional source",
+    )
+    (work / "vendor-net.v").write_text(logic.replace("`define XIL_TIMING", ""))
+    stage(
+        "edif",
+        [
+            yosys,
+            "-Q",
+            "-q",
+            "-p",
+            "read_verilog -lib +/xilinx/cells_sim.v +/xilinx/cells_xtra.v; read_verilog vendor-net.v; hierarchy -top phi_timing_harness; write_edif -pvector bra -attrprop vendor.edf",
+        ],
+    )
+    stage(
+        "placement",
+        [
+            java,
+            "-Xmx3g",
+            "-cp",
+            jar,
+            HERE / "Placement.java",
+            vendor / "routed.dcp",
+            work / "locations.tsv",
+            work / "vendor.edf",
+        ],
+    )
+
+
+def simulate(
+    work: Path,
+    models: Path,
+    backend: str,
+    stage_name: str,
+    net_name: str,
+    kinds: set[str],
+    stage: Callable,
+    *,
+    extra_top: tuple[str, Path] | None = None,
+) -> None:
+    """Record primitive output changes for 4,096 clocks using the shared functional harness."""
+    directory = work / backend
+    directory.mkdir()
+    (directory / "primitive-types.txt").write_text(
+        "".join(k + "\n" for k in sorted(kinds))
+    )
+    program = work / (stage_name + ".vvp")
+    stage(
+        stage_name + "-compile",
+        [
+            "iverilog",
+            "-g2012",
+            "-s",
+            "functional_tb",
+            "-s",
+            "glbl",
+            *(["-s", extra_top[0]] if extra_top else []),
+            "-o",
+            program,
+            "-y",
+            models / "unisims",
+            *([extra_top[1]] if extra_top else []),
+            HERE / "functional_tb.sv",
+            work / net_name,
+            models / "glbl.v",
+        ],
+    )
+    stage(
+        stage_name + "-sim",
+        ["vvp", "-M" + str(work), "-mtransitions", program],
+        directory,
+        seconds=3000 if backend == "openxc7" else 1200,
+    )
+
+
 def measure(
     run: Path, work: Path, models: Path, jar: Path, guard: Path, yosys: Path
 ) -> None:
@@ -54,14 +149,7 @@ def measure(
         == receipt["tools"]["yosys-executable"],
         "Yosys executable",
     )
-    model_set = hashlib.sha256()
-    for model in [models / "glbl.v", *sorted((models / "unisims").glob("*.v"))]:
-        model_set.update(
-            str(model.relative_to(models)).encode()
-            + b"\0"
-            + bytes.fromhex(digest(model))
-        )
-    require(model_set.hexdigest() == UNISIM, "UNISIM release")
+    check_models(models)
     work.mkdir()
     env = os.environ.copy()
     rw = Path(env.get("RAPIDWRIGHT_PATH", work / "rw")).resolve()
@@ -77,36 +165,7 @@ def measure(
         )
 
     stage("execution", [sys.executable, HERE / "execution.py", run, work / "rtl"])
-    net = (run / VENDOR / "routed.v").read_text()
-    logic, sep, _ = net.partition("`ifndef GLBL")
-    require(
-        bool(sep) and logic.count("`define XIL_TIMING") == 1,
-        "archived functional source",
-    )
-    (work / "vendor-net.v").write_text(logic.replace("`define XIL_TIMING", ""))
-    stage(
-        "edif",
-        [
-            yosys,
-            "-Q",
-            "-q",
-            "-p",
-            "read_verilog -lib +/xilinx/cells_sim.v +/xilinx/cells_xtra.v; read_verilog vendor-net.v; hierarchy -top phi_timing_harness; write_edif -pvector bra -attrprop vendor.edf",
-        ],
-    )
-    stage(
-        "placement",
-        [
-            "java",
-            "-Xmx3g",
-            "-cp",
-            jar,
-            HERE / "Placement.java",
-            run / VENDOR / "routed.dcp",
-            work / "locations.tsv",
-            work / "vendor.edf",
-        ],
-    )
+    vendor_netlist(run / VENDOR, work, yosys, jar, "java", stage)
     for name, sha in DEVICE_DATA.items():
         require(digest(rw / "data" / name) == sha, "RapidWright data " + name)
     stage("observer", ["iverilog-vpi", HERE / "transitions.cpp"])
@@ -114,8 +173,6 @@ def measure(
         ("vivado", "vivado", "vendor-net.v"),
         ("openxc7", "native", "native-net.v"),
     ]:
-        directory = work / backend
-        directory.mkdir()
         if backend == "vivado":
             kinds = {
                 l.split("\t")[1]
@@ -149,34 +206,7 @@ def measure(
                     "cells"
                 ].values()
             } - {"$scopeinfo"}
-        (directory / "primitive-types.txt").write_text(
-            "".join(k + "\n" for k in sorted(kinds))
-        )
-        program = work / (stage_name + ".vvp")
-        stage(
-            stage_name + "-compile",
-            [
-                "iverilog",
-                "-g2012",
-                "-s",
-                "functional_tb",
-                "-s",
-                "glbl",
-                "-o",
-                program,
-                "-y",
-                models / "unisims",
-                HERE / "functional_tb.sv",
-                work / net_name,
-                models / "glbl.v",
-            ],
-        )
-        stage(
-            stage_name + "-sim",
-            ["vvp", "-M" + str(work), "-mtransitions", program],
-            directory,
-            seconds=3000 if backend == "openxc7" else 1200,
-        )
+        simulate(work, models, backend, stage_name, net_name, kinds, stage)
     require(
         digest(run / "capture.json") == capture_sha, "capture changed during replay"
     )

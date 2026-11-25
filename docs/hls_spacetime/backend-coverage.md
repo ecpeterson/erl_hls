@@ -163,20 +163,44 @@ npm --prefix apps/hls_spacetime start -- --data "$PLACED_FLOW"
 
 #### Two-worker X-plane routed witness
 
-Two adjacent X workers exercise the scheduler RAM, a real capture register, the DSP operand, and public correction frames. The 2 × 1, one-shard profile uses the same two-pin harness, XC7Z030, 20 ns constraint and seed 1. Timing-driven placement took 119 seconds. Congestion-only routing of that placement took 64 seconds and finished with zero conflicts. The post-route nextpnr estimate is 41.06 MHz against 50 MHz.
+Both tools implemented the same two adjacent X workers, four RTL files, two-pin harness, XC7Z030-1 and 20 ns clock. Both routed the design. Vivado 2024.2 routed all 22,711 routable nets, with +5.588 ns setup and +0.052 ns hold slack. The seed-1 openXC7 placement took 119 seconds and congestion-only routing took 64 seconds, ending with zero conflicts and a 41.06 MHz estimate against 50 MHz.
 
-The 4,096-clock RTL and mapped functional replays agree on the harness output and all 42 accepted frames, including six corrections. All 28,419 observed primitives have a physical location. Of 113,931 nonclock SDF connections, 8,725 lack a modeled clock launch and 4,448 lack an observed endpoint after launch analysis. All remaining 100,758 have sink-specific switch geometry. The SDF supplies routed wire delay for 53,469 and predicted wire delay for 47,289 permuted LUT inputs. The viewer also draws 87,142 timed primitive arcs. Geometry follows switch tiles. Height interpolates modeled arrival time between pins. The activity filter uses settled primitive output changes.
+The shared 4,096-clock stimulus elicited 36 status frames and six corrections. Each mapped functional replay checked the public digest against RTL on every clock, along with the physically retained capture and handshake registers for the enabled X plane. Vivado retains 102 X payload bits. The native mapping retains all 128. All observed primitives were located in their own implementation.
 
-Open the gallery at `/workload.html?view=flow&cycle=90` for 919 connections and 7,024 primitive arcs. In **Connections**, select **State RAM → capture D** or **Capture Q → DSP input** to isolate bit 84. The first path starts at the RAM clock and ends at capture D after 13 switch visits and 4.012 ns. The next starts at the capture clock and ends at DSP A8 after 39 switch visits and 5.308 ns. At C89 the RAM output changes. At C90 capture Q and the DSP operand both change. The static path can be inspected at any clock. The pin observations below the plot refer to the selected clock.
+| Two-worker replay | Vivado | openXC7 |
+| --- | ---: | ---: |
+| Located primitives | 29,059 | 28,419 |
+| Timed data connections in the viewer | 108,835 | 100,758 |
+| Connections with unresolved physical spans | 7,533 | 0 |
+| Active connections / primitive arcs at C90 | 1,077 / 6,202 | 919 / 7,024 |
+| RAM clock → capture D for state bit 84 | 2.809 ns | 4.012 ns |
+| Capture clock → executor DSP operand | 3.293 ns to A9 | 5.308 ns to A8 |
 
-The local artifact directory `../hls_artifacts/runs/spacetime-g4-parity-2026-11-24/two-phi-routed` contains the gallery, routed capture and replay observations. Run from the repository root:
+Vivado traces 100,094 branches through switches and resolves 1,208 direct connections. One of the 108,836 data connections lacks a clock-launched arrival. openXC7 supplies routed wire delays for 53,469 branches and predicted delays for 47,289 permuted LUT inputs. Of its 113,931 nonclock SDF connections, 8,725 lack a modeled clock launch and 4,448 more lack an observed endpoint. The interactive drawing follows the traced switch tiles. Heights interpolate modeled arrival times and the activity filter uses settled primitive output changes.
+
+Open `/workload.html?view=flow&cycle=90` in the paired gallery. In **Connections**, select **State RAM → capture D** or **Capture Q → DSP input** to isolate bit 84 in both panels. Vivado shows five then 21 switch-tile visits, collapsing consecutive switches in a tile. The first stage includes one unresolved 55 ps net span. openXC7 shows 13 then 39 switch visits. Both simulations matched all 4,085 known RTL RAM samples. At C89 only the RAM output changed among the three sampled pins. At C90 the RAM output, capture Q and DSP operand changed on both designs.
 
 ```sh
-run=../hls_artifacts/runs/spacetime-g4-parity-2026-11-24/two-phi-routed
-npm --prefix apps/hls_spacetime start -- --data "$PWD/$run/gallery" --port 49715
+base=../hls_artifacts/runs/spacetime-g4-parity-2026-11-24
+npm --prefix apps/hls_spacetime start -- --data "$PWD/$base/two-phi-paired/gallery" --port 49715
 ```
 
-To rebuild the gallery, extract `capture.tar.gz` and `observations.tar.gz` into a fresh directory. Run `apps/hls_spacetime/test/native/four_phi/workload/two_phi.py` with Python and pass the extracted `capture` to `--run`, `obs` to `--work`, the pinned XC7Z030 database to `--chipdb`, the matching nextpnr Xilinx `constids.inc` to `--constids` and a fresh directory to `--output`. A matched two-worker Vivado capture remains open. [Witness and clock-by-clock checks](../../yap/hls_spacetime/g44-phi-routing.json)
+To rebuild, unpack `two-phi-routed/{capture,observations}.tar.gz` and `two-phi-paired/{vivado-reference,vivado-observations}.tar.gz` in a fresh directory. Use the pinned Java, RapidWright JAR, device data, chip database and Xilinx `constids.inc` from the witness. The paired input archive also records Vivado's synthesis inputs and Tcl. [Input identities and clock-by-clock checks](../../yap/hls_spacetime/g44-phi-routing.json)
+
+```sh
+workload=apps/hls_spacetime/test/native/four_phi/workload
+python3 "$workload/pair_two_phi.py" publish --run "$stage/capture" --native-work "$stage/obs" \
+  --vendor "$stage/results/phi-20.0ns" --work "$stage/observed" --java "$JAVA" --jar "$RAPIDWRIGHT_JAR" \
+  --chipdb "$CHIPDB" --constids "$CONSTIDS" --output "$stage/gallery"
+```
+
+To rerun the Vivado functional simulation, use `measure` with a fresh `--work` directory, the same capture, native observations, vendor results, Java and JAR, plus `--models`, `--yosys` and `--guard`. Both commands use the pinned data in `RAPIDWRIGHT_PATH`.
+
+#### Vivado references for the remaining G4 work
+
+The artifact archive keeps the Vivado inputs, routed checkpoints, netlists, SDF and verification records for local analysis. The 512-clock dynamic-tap fixtures checked all 16 addresses on SRL16E and all 32 on SRLC32E. Both exercised 246 shift clocks and 266 holds. The routed output changed 204 and 217 times respectively. The September micro checkpoint already includes a DSP with MREG and PREG enabled. The original four-worker route has 18 PREG-enabled DSPs available for workload probes.
+
+A read-only Vivado query matched the physical BEL pins at both ends of every unresolved gallery branch. In the two-worker design, 7,293 of 7,533 branches stay inside one site and 240 belong to routed nets. In the four-worker design those counts are 8,371 and 1,490 of 9,861. The archive retains the logical EDIF, endpoint attachments, net route strings and assigned PIPs for resolving the switch paths offline. The viewer continues to mark those spans as unresolved until an ordered physical path is established. [Reference inputs and measured coverage](../../yap/hls_spacetime/g44-vivado-references.json)
 
 ## Remaining work
 
