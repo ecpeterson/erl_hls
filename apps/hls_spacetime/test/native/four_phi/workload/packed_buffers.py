@@ -1,5 +1,6 @@
 """Bind nextpnr's inserted identity LUTs to the exact sampled signal driving I0."""
 
+import re
 import struct
 from pathlib import Path
 
@@ -27,8 +28,43 @@ def identity_input(cell: dict, output: str) -> int | None:
     return bits[0] if bits else None
 
 
-def input_sources(cells: dict, names: list[str]) -> dict:
-    """Return (observer index, physical output) or a constant for each inserted identity LUT."""
+def folded_ground(cells: dict, grid: ChipGrid, config: Path) -> set[str]:
+    """Identify input-elided 5-LUT buffers whose explicit physical O5 truth table is all zero."""
+    features = {}
+    for name, cell in cells.items():
+        attrs = cell["attributes"]
+        if (
+            cell["type"] != "SLICE_LUTX"
+            or attrs.get("X_ORIG_TYPE") != "LUT1"
+            or attrs.get("X_ORIG_PORT_O5") != "O"
+            or int(cell["parameters"]["INIT"], 2) != 2
+            or any(attrs.get(f"X_ORIG_PORT_A{i}") for i in range(1, 7))
+        ):
+            continue
+        site, bel = attrs["NEXTPNR_BEL"].split("/")
+        if not re.fullmatch(r"[ABCD]5LUT", bel):
+            continue
+        tile = grid.location(site)["tile"]
+        half = int(site.split("_X")[1].split("Y")[0]) % 2
+        kind = "SLICEM" if tile.startswith("CLBLM_") and half == 0 else "SLICEL"
+        features[f"{tile}.{kind}_X{half}.{bel[0]}LUT.INIT[63:0]"] = name
+    result = set()
+    seen = set()
+    with config.open() as stream:
+        for line in stream:
+            feature, _, value = line.strip().partition(" = ")
+            if feature in features:
+                require(feature not in seen, "duplicate LUT configuration feature")
+                seen.add(feature)
+                if re.fullmatch(r"64'b[01]{32}0{32}", value):
+                    result.add(features[feature])
+    return result
+
+
+def input_sources(
+    cells: dict, names: list[str], ground: frozenset[str] | set[str] = frozenset()
+) -> dict:
+    """Resolve each inserted buffer to an observed bit or a routed/configured constant in cell order."""
     ids = {name: i for i, name in enumerate(cells)}
     observed = observe_ids(names, cells, ids)
     drivers = {
@@ -51,7 +87,7 @@ def input_sources(cells: dict, names: list[str]) -> dict:
             signal = identity_input(cell, outputs[0])
             if signal in drivers:
                 buffers[name] = drivers[signal]
-    sources = {}
+    sources = {name: None for name in ground if ids[name] not in observed}
     for name in buffers:
         src, pin = buffers[name]
         seen = {name}
@@ -65,9 +101,9 @@ def input_sources(cells: dict, names: list[str]) -> dict:
             src, pin = buffers[src]
         if ids[src] in observed:
             sources[name] = observed[ids[src]], pin
-        elif cells[src]["type"] in ("PSEUDO_GND", "PSEUDO_VCC"):
+        elif src in ground or cells[src]["type"] in ("PSEUDO_GND", "PSEUDO_VCC"):
             sources[name] = None
-    return sources
+    return {name: sources[name] for name in cells if name in sources}
 
 
 def append_buffers(

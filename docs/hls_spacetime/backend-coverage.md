@@ -102,7 +102,7 @@ Both memories use READ_FIRST with their optional output register bypassed. All i
 
 The paired gallery opens on the first accepted public frames at C105. Scrub from C0 to C4095 or jump to a frame. **Window** selects one clock, a short history, or the union over the entire replay. Both maps count distinct primitives with a known change between successive settled output samples. Click a tile for measured instance names and types. Zoom both maps around that tile to inspect its neighbors. Unknown comparisons have a separate count and can coexist with a known change on another output. C0 initializes the observer.
 
-The source timeline covers 21 generated processes, 42 FIFOs, eight scheduler RAMs and the X/Z output interface. It records 238 handshakes, enables and public probes before the active edge, plus addresses and accepted 128-bit frames. An interface can appear at both ends of a transfer. **Only selected instance** uses retained synthesis hierarchy, unambiguous named output nets and checked public capture registers. Shared or unnamed logic remains in the whole-design view. The physical maps are functional simulations of each technology netlist on its own placement. The openXC7 checkpoint ends at placement. The 3D view below adds Vivado static timing to the sampled activity.
+The source timeline covers 21 generated processes, 42 FIFOs, eight scheduler RAMs and the X/Z output interface. It records 238 handshakes, enables and public probes before the active edge, plus addresses and accepted 128-bit frames. An interface can appear at both ends of a transfer. **Only selected instance** uses retained synthesis hierarchy, unambiguous named output nets and checked public capture registers. Shared or unnamed logic remains in the whole-design view. The physical maps are functional simulations of each technology netlist on its own placement. The original openXC7 capture ended at placement. The [routed comparison](#four-phi-routed-parity-campaign) adds switch geometry and pin timing on both implementations.
 
 The opening comparison covers 70,418 Vivado primitives and 65,381 openXC7 primitives. Each simulated primitive has a location on its own implementation. Over the full replay 19,800 Vivado primitives and 18,545 openXC7 primitives changed output. At C32 alone the counts were 2,702 and 2,252. Source RTL accepted 86 X and 86 Z status frames between C105 and C4017, with steps 0 through 42 for both coordinates on each plane. This input emitted zero correction frames. The public activity pin, initialized capture register lanes and six handshake-related register lanes per backend are checked at each edge. The design retains 99 physical payload lanes per plane in Vivado and 103 logical payload lanes backed by 102 distinct registers per plane in Yosys. The corrected C32 drill-down follows ten placed cells from `RAMB18_X2Y32/DOADO11` to `DSP48_X2Y56/A7`.
 
@@ -126,13 +126,13 @@ npm --prefix apps/hls_spacetime start -- --data "$PAIRED"
 
 ### Within-clock signal flow
 
-Choose **3D signal flow** in the paired gallery. Opening `workload.html?view=flow&cycle=32` selects a busy clock. Drag either scene to orbit both, scroll to zoom and click a line for its endpoints. **Both primitives changing** selects connections between cells with known output changes at that clock. **Changing driver** also includes fanout to cells whose outputs stayed stable. The simulation observes settled primitive outputs. Pin-specific transitions, glitches and actual subcycle event times are unobserved.
+Choose **3D signal flow** in the paired gallery. Opening `workload.html?view=flow&cycle=32` selects a busy clock. Drag either scene to orbit both, scroll to zoom and click a line for its endpoints. **Both primitives changing** selects connections between cells with known output changes at that clock. **Changing driver** also includes fanout to cells whose outputs stayed stable. The replay samples settled primitive outputs and the named bits listed in **Capture coverage**. Within-clock heights come from structural timing. The monitor samples once per clock and cannot resolve glitches.
 
 Vivado height uses maximum SDF arc delays, accumulated from a local launch clock pin through each reachable input and output. Bus-wide arcs expand over connected lanes. A net rises by its own interconnect delay. Switch-tile heights interpolate that delay along the retained directed branch. Of 273,350 non-launch-clock connections, 273,349 have a clock-launched arrival. Of those, 260,265 connect through fabric switches, 3,963 are direct and 9,121 use a selected site mux. All 2,823 consecutive net pin pairs across the 100 saved slow setup paths appear in the gallery, including repeated occurrences. Cell arcs use their individual delays. These structural arrival envelopes omit clock skew, timing exceptions and input sensitization.
 
-The original openXC7 logic-depth view shows 234,038 placed driver/sink cell pairs reachable from clocked boundaries. Its vertical axis counts combinational cells along the longest structural chain. Pairs collapse multiple pins on the same two cells. At C32 the default filter shows 4,565 Vivado net connections and 22,087 primitive arcs alongside 2,780 openXC7 pairs. The route and delay of the full native implementation remain open under G4.4b. [Flow evidence ledger](../../yap/hls_spacetime/g44-four-phi-flow.json)
+The original openXC7 logic-depth view shows 234,038 placed driver/sink cell pairs reachable from clocked boundaries. Its vertical axis counts combinational cells along the longest structural chain. Pairs collapse multiple pins on the same two cells. At C32 the default filter shows 4,565 Vivado net connections and 22,087 primitive arcs alongside 2,780 openXC7 pairs. G4.4b subsequently traced the routed native implementation. [Flow evidence ledger](../../yap/hls_spacetime/g44-four-phi-flow.json)
 
-Serve `runs/spacetime-g4-parity-2026-11-24/decoder-compute-coverage/four-gallery` from the artifact archive for the updated four-worker comparison. To reproduce the flow sidecars from the paired replay, use its `RAPIDWRIGHT_PATH`, the JDK 21 executable, the same physical device database and the archived checkpoint's readable EDIF. Run under the preceding serial process-group guard with a fresh output directory.
+Serve `runs/spacetime-g4-parity-2026-11-24/decoder-four-route-seed2/gallery` from the artifact archive for the routed four-worker comparison. To reproduce the flow sidecars from the paired replay, use its `RAPIDWRIGHT_PATH`, the JDK 21 executable, the same physical device database and the archived checkpoint's readable EDIF. Run under the preceding serial process-group guard with a fresh output directory.
 
 ```sh
 python3 "$workload/flow.py" --gallery "$PAIRED" --run "$RUN" --archive "$REFERENCE_ARCHIVE" \
@@ -142,7 +142,7 @@ npm --prefix apps/hls_spacetime start -- --data "$FLOW"
 
 ### openXC7 placement timing
 
-The 3D view in the enriched four-Phi gallery opens on placed pins. nextpnr writes SDF from the same placement with packing, placement and routing disabled. The exporter checks the router, device database and checkpoint hashes, matches every driven packed input to its unique driver, and propagates from clock pins through modeled primitive arcs. Each connection uses its own predicted interconnect delay. An input stops at its own arrival even if a different input reaches the same cell later. The vertical scale is nanoseconds. Tick **Shared ns scale** to compare heights directly.
+The earlier placement-timing gallery opens on placed pins. nextpnr writes SDF from the same placement with packing, placement and routing disabled. The exporter checks the router, device database and checkpoint hashes, matches every driven packed input to its unique driver, and propagates from clock pins through modeled primitive arcs. Each connection uses its own predicted interconnect delay. An input stops at its own arrival even if a different input reaches the same cell later. The vertical scale is nanoseconds. Tick **Shared ns scale** to compare heights directly.
 
 Pins use their placed tile coordinates. Local strokes show cell delays. Picking a pin reveals one schematic connection, and **Endpoint spans** draws all of them as dashed lines. **Cell pairs** restores logic depth, including connections without qualified timing. The placement contains 85,828 net records and zero bound switch lists. Neither the endpoint spans nor the placement estimates establish the wires used by a completed route.
 
@@ -157,11 +157,28 @@ npm --prefix apps/hls_spacetime start -- --data "$PLACED_FLOW"
 
 #### Four-Phi routed parity campaign
 
-The routed two-worker pair already exercises the scheduler RAM, capture register, DSP operand and correction path. The steps below record the four-worker route attempts and how to resume them if a four-worker congestion, fanout or implementation question arises. Current omissions and extension triggers are listed under [remaining work](#remaining-work).
+Both four-worker implementations have physical routes. Open `workload.html?view=flow&cycle=32` for the full clock, or `workload.html?view=flow&filter=ram-to-dsp&cycle=43` to isolate scheduler bit 84 from the RAM clock to the first DSP operand. The slow-path report selected Vivado operand A[20]. The routed native connectivity walk selected A8 on DSP48_X2Y56. The two paths end on partial products of the same observed multiply. The RAM bit had a known transition on the same 650 clocks in both mapped replays. At C43 the native operand also changed. [Checkpoints, path measurements and replay](../../yap/hls_spacetime/g44-four-route-seed2.json)
 
-1. **Obtain a legal native route.** The stock-map run ended its hour with 2,120 overused wires. Mapping the decoder and harness separately with the corrected SDP72 map retained 64,989 decoder primitives, 48 DSPs and 52 block RAMs. At 20 ns and seed 1 it ended its hour with 80 overused wires. A retry requesting `--no-tmdriv` on the original frozen placement reached one conflict, then stopped at two after 50 iterations without improvement. That placement also restores timing-driven routing. Both contested wires carry the same scheduler output bit. Try a different routing seed on that placement and compare the named conflicts before repeating a full placement. The four-worker native gallery still uses placement estimates. [Routing attempts and input identities](../../yap/hls_spacetime/g44-phi-routing.json)
-2. **Bind the replay to that implementation.** Match packed pins, placement and simulated primitives to the routed checkpoint. Repeat the 4,096-clock replay and the public capture-lane checks if synthesis changes. Establish correspondence of the C32–C37 RAM transaction before attaching any route or timing to the comparison.
-3. **Qualify and expand the physical view.** Trace used switches to each sink on scheduler bit 84 first, including the inserted carry-input LUT and any packed LUT input permutation. Check the native model and timing provenance at each hop, then export the whole design. Report routed, direct, predicted and unresolved branches separately for the whole design and for C32. Registered hard-block timing and per-output-bit switching each need their own witnesses.
+| Four-worker routed comparison | Vivado | openXC7 |
+| --- | ---: | ---: |
+| Clock-launched connections with sink geometry | 273,349 | 253,938 |
+| C32 connections / primitive arcs, both endpoints changing | 4,178 / 13,765 | 3,075 / 19,073 |
+| Selected RAM clock → DSP operand, accumulated SDF | 10.521 ns | 13.978 ns |
+| Geometry along that selection | 60 switch-tile visits | 85 switch visits |
+
+Congestion-driven router2 with seed 2 reused the original seed-1 placement. Only the router seed metadata and timing-driven setting changed on the input copy. It converged at iteration 78 with zero overuse and zero architecture binding failures. The complete run took 652.3 seconds and peaked at 1.83 GiB under the one-hour, 6 GiB guard. The exporter wrote 1,449,569 fixed switches across 74,256 nets. Earlier seed-1 attempts and the timed-out stock map are retained separately. [Prior routing attempts](../../yap/hls_spacetime/g44-phi-routing.json)
+
+Every drawn native branch matches its independent wire and switch sum within 1 ps, including 120,979 permuted LUT inputs and 3,482 direct branches with zero switches. The route and placement have the same 70,063 configured cells. Three ground buffers lost their I0 label during input legalization. The cell-configuration FASM gives all 32 O5 addresses of each buffer a zero output. Shared pins on the companion LUT can still toggle. The mapped replay and per-pin observations therefore carry across the route. The selected native path has 3.950 ns of primitive delays and 10.028 ns of wire delay. The design missed its 50 MHz target. The worst clock path has 26 traced net hops totaling 64.317 ns of wiring, 3.7 ns of reported logic and a reported maximum of 14.70 MHz. [Route evidence](../../yap/hls_spacetime/g44-four-route-seed2.json)
+
+To rebuild the current gallery, extract `decoder-four-route-seed2/evidence.tar.gz` to `$route` and use the XC7Z030 database identified by the capture receipt. The archive includes the paired transaction, pin samples and configuration features consumed by the command. Run under the serial process-group guard.
+
+```sh
+python3 "$workload/decoder_coverage.py" --gallery "$route/paired" --capture "$route/capture/capture.json" \
+  --checkpoint "$route/routed.json" --sdf "$route/routed.sdf" --sdf-build "$route/checks/bin/spacetime-build.json" \
+  --chipdb "$CHIPDB" --fixed "$route/fixed.txt" --constids "$route/constids.inc" \
+  --wire-delays "$route/wire-delay.tsv" --lut-config "$route/lut-config/cell-config.fasm" \
+  --native-pins "$route/pins-openxc7" --vivado-pins "$route/pins-vivado" --output "$out/four-gallery"
+```
 
 #### Two-worker X-plane routed witness
 
@@ -252,16 +269,16 @@ Open **Capture coverage** under either 3D panel. Counts cover the whole replay. 
 
 The four-worker native netlist uses two SRL16Es and one SRLC32E with constant tap addresses. The observer emits positive-edge CLK → Q at 1,102 and 1,109 ps respectively. D setup/hold is 106/87 ps and CE setup/hold is 410/−17 ps. The three placed cells agree with the slowest intrinsic values for their primitive types in the routed Vivado workload SDF. Vivado partitions the flow shift chain at different bit positions. A live tap address or inverted clock disables the native fixed-tap model. [Native model](../../platforms/xc7/timing_coverage/fixed_srl.inc)
 
-Packing inserts 1,841 identity LUTs on two workers and 4,678 on four. The publisher checks the truth table, selects the original I0 from the shared physical inputs and follows its driver to a sampled bit or constant. These LUTs have their own sites, timing and activity in the gallery. C0 and comparisons involving X/Z keep the original four-state semantics. Selecting a line identifies its activity source. [Packed buffer binding](../../apps/hls_spacetime/test/native/four_phi/workload/packed_buffers.py)
+Packing inserts 1,841 identity LUTs on two workers and 4,678 on four. The publisher checks the truth table and follows the original I0 on the shared physical inputs to a sampled bit or constant. For an input-elided O5 buffer, it can qualify a constant from the matching physical configuration. These LUTs have their own sites, timing and activity in the gallery. C0 and comparisons involving X/Z keep the original four-state semantics. Selecting a line identifies its activity source. [Packed buffer binding](../../apps/hls_spacetime/test/native/four_phi/workload/packed_buffers.py)
 
-| Native SDF connections | Two workers | Four workers |
-| --- | ---: | ---: |
-| Clock-launched, both endpoints in replay | 105,654 | 241,191 |
-| Driven by a constant, directly or through an identity LUT | 8,275 | 17,966 |
-| Clock or package I/O boundary | 2 | 2 |
-| Other omitted launches or missing replay endpoints | 0 | 0 |
+| Native SDF connections | Two workers, routed | Four workers, placed | Four workers, routed |
+| --- | ---: | ---: | ---: |
+| Clock-launched, both endpoints in replay | 105,654 | 241,191 | 253,938 |
+| Driven by a constant, directly or through an identity LUT | 8,275 | 17,966 | 24,984 |
+| Clock or package I/O boundary | 2 | 2 | 2 |
+| Other omitted launches or missing replay endpoints | 0 | 0 | 0 |
 
-An independent census found all 67,412 two-worker and 164,921 four-worker LUT, carry and mux arcs between clock-reached functional inputs and consumed outputs. Each connected native DSP input/output pair in that population also has an SDF arc. In the four-worker placement view, C32 shows 2,916 native connections and 19,073 primitive arcs with the default activity filter. The wider gallery’s native timing comes from its saved placement. Both two-worker implementations and the four-worker Vivado implementation have physical routes. The earlier repetition N2 capture has its own 407 unqualified destination bits and 2,409 disconnected constant branches. [Decoder evidence and reproduction inputs](../../yap/hls_spacetime/g44-decoder-compute-coverage.json)
+An independent census found all 67,412 two-worker and 164,921 four-worker LUT, carry and mux arcs between clock-reached functional inputs and consumed outputs. Each connected native DSP input/output pair in that population also has an SDF arc. In the four-worker placement view, C32 shows 2,916 native connections and 19,073 primitive arcs with the default activity filter. The routed checkpoint has extra physical input attachments from shared LUT pins after legalization. Its C32 view displays 3,075 native connections and the same 19,073 primitive arcs. The earlier repetition N2 capture has its own 407 unqualified destination bits and 2,409 disconnected constant branches. [Decoder evidence and reproduction inputs](../../yap/hls_spacetime/g44-decoder-compute-coverage.json)
 
 To reproduce the placement comparison, restore the four-worker capture and the previous `vivado-physical-branches/four-gallery`. Extract `decoder-compute-coverage/evidence.tar.gz` to `$evidence` and supply the XC7Z030 chip database identified in the capture receipt.
 

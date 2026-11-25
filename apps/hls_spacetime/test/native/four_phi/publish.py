@@ -309,7 +309,7 @@ def publish(run: Path, chipdb: Path, output: Path) -> None:
         and receipt["tools"]["chipdb"] == digest(chipdb)
         and receipt["constraints"] == digest(XDC)
         and receipt["periodNs"] == 20
-        and receipt["seed"] == 1
+        and type(receipt["seed"]) is int
         and receipt["pins"] == {"clock": "Y14", "activity": "V13"}
         and receipt["testbench"] == digest(HERE / "transaction_tb.sv"),
         "capture provenance",
@@ -361,7 +361,7 @@ def publish(run: Path, chipdb: Path, output: Path) -> None:
             ),
             (
                 "openxc7",
-                openxc7.placed_path(run / "native", mode),
+                openxc7.placed_path(run / "native", mode, seed=receipt["seed"]),
                 native[0],
             ),
         ):

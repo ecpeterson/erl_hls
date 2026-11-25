@@ -204,7 +204,9 @@ function showFlowCoverage(article, backend, timing, model, groups) {
       : "Rows use whole-primitive changes. This capture has no per-output-bit activity masks.",
   );
   if (timing.identityBuffers) {
-    note(`For ${format(timing.identityBuffers)} packer-inserted LUT buffers, the replay derives settled output activity from the connected input bit and the identity truth table.`);
+    const folded = timing.foldedGround?.cells ?? 0;
+    note(`The replay derives settled activity for ${format(timing.identityBuffers - folded)} packer-inserted LUT buffers from their input bits.`);
+    if (folded) note(`The programmed truth tables hold ${format(folded)} additional buffer outputs at zero.`);
   }
   const output = groups?.find(({ kind }) => kind === "OBUF");
   if (output) {
@@ -286,8 +288,10 @@ export async function createFlow(replay, catalogs, asset) {
         : "Height accumulates nextpnr’s post-route SDF, including placement estimates for permuted LUT inputs.");
   }
   const vendorLane = replay.flow.vivado?.stateLane;
-  if (replay.selectedPath && routed && (backends.length === 1 || vendorLane)) {
-    const filter = document.getElementById("flow-filter");
+  const filter = document.getElementById("flow-filter");
+  if (routed?.directOperand && replay.flow.vivado?.directOperand) {
+    filter.add(new Option("State RAM → DSP input", "ram-to-dsp"));
+  } else if (replay.selectedPath && routed && (backends.length === 1 || vendorLane)) {
     filter.add(new Option("State RAM → capture D", "ram-stage"));
     filter.add(new Option("Capture Q → DSP input", "dsp-stage"));
   }
@@ -517,7 +521,7 @@ export async function createFlow(replay, catalogs, asset) {
     stageActivity(panel, cycle, replay.selectedPath.transitions);
   }
 
-  /** Report only observed known-to-known changes at the three individually sampled pins. */
+  /** Report known-to-known changes at the named endpoints of the static path. */
   function stageActivity(panel, cycle, transitions) {
     const labels = { ram: "RAM output", q: "capture Q", dsp: "DSP operand" };
     const changed = Object.entries(transitions)
@@ -530,7 +534,7 @@ export async function createFlow(replay, catalogs, asset) {
       cycle +
       (changed.length
         ? " changed at " + changed.join(", ")
-        : " had no known change at the three probed pins") +
+        : " had no known change at the probed pins") +
       ".";
   }
 
@@ -582,8 +586,9 @@ export async function createFlow(replay, catalogs, asset) {
     ];
   }
 
-  /** Draw one Vivado clock segment from the indexed SDF arcs and its own routed switch list. */
-  function showVendorStage(panel, rows, cycle) {
+  /** Draw a single clock interval using the selected implementation's SDF rows and switch tiles. */
+  function showIndexedStage(b, rows, name, transitions, cycle) {
+    const panel = panels[b];
     const m = panel.model;
     let elapsed = 0,
       visits = 0,
@@ -598,19 +603,15 @@ export async function createFlow(replay, catalogs, asset) {
     for (const [j, i] of rows.entries()) {
       const a = m.data.getUint32(i * 16, true),
         d = m.data.getUint32(i * 16 + 4, true);
-      const edges = paths("vivado", i, a, d, elapsed, elapsed + delays[j]);
-      panel.active.add(catalogs.vivado.tile[a]);
-      panel.active.add(catalogs.vivado.tile[d]);
+      const edges = paths(b, i, a, d, elapsed, elapsed + delays[j]);
+      panel.active.add(catalogs[b].tile[a]);
+      panel.active.add(catalogs[b].tile[d]);
       if (edges[0].dash) missing++;
       if (m.siteMuxes?.[i]) muxes++;
       for (const edge of edges) visits += edge.switches ?? 0;
       panel.paths.push(...edges);
       elapsed += delays[j];
     }
-    const name =
-      rows === vendorLane.segments[0]
-        ? "RAM clock → capture D"
-        : "Capture clock → DSP operand";
     panel.article.querySelector(".stat").textContent =
       name +
       " · " +
@@ -622,13 +623,13 @@ export async function createFlow(replay, catalogs, asset) {
       (missing
         ? ` · ${missing} unresolved branch${missing === 1 ? "" : "es"}`
         : "");
-    stageActivity(panel, cycle, vendorLane.transitions);
+    stageActivity(panel, cycle, transitions);
   }
 
   /** Join the one-clock known-change bits to both endpoints or to the driver alone. */
   function update(cycle, masks, filter) {
     current = [cycle, masks, filter];
-    const stage = filter === "ram-stage" || filter === "dsp-stage";
+    const stage = filter === "ram-stage" || filter === "dsp-stage" || filter === "ram-to-dsp";
     mode.disabled = stage;
     if (stage) mode.value = "routes";
     const timed = !!nativeTiming && mode.value !== "depth";
@@ -658,10 +659,15 @@ export async function createFlow(replay, catalogs, asset) {
       p.paths = [];
       p.selection = null;
       if (stage) {
-        if (b === "vivado")
-          showVendorStage(
-            p,
+        if (filter === "ram-to-dsp") {
+          const path = (b === "vivado" ? replay.flow.vivado : routed).directOperand;
+          showIndexedStage(b, path.rows, "RAM clock → DSP operand", path.transitions, cycle);
+        } else if (b === "vivado")
+          showIndexedStage(
+            b,
             vendorLane.segments[filter === "ram-stage" ? 0 : 1],
+            filter === "ram-stage" ? "RAM clock → capture D" : "Capture clock → DSP operand",
+            vendorLane.transitions,
             cycle,
           );
         else showStage(p, filter, cycle);
@@ -976,7 +982,9 @@ export async function createFlow(replay, catalogs, asset) {
       p.names[d] +
       (pair ? "/" + pair[1] : "") +
       (p.model.activity?.lanes[i] >= 0
-        ? " · sampled output bit changed"
+        ? changed(p.model.activity.changes, current[0] * p.model.activity.stride * 8 + p.model.activity.lanes[i])
+          ? " · sampled output bit changed"
+          : " · no known change on sampled output bit"
         : (found.local ? d : a) >= p.model.firstBuffer
           ? " · identity buffer copied its input bit"
           : " · primitive-level activity");

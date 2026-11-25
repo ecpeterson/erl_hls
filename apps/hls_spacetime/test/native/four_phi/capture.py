@@ -254,8 +254,10 @@ def identities(
     chipdb: Path,
     mode: str,
     core_harness: bool = False,
+    *,
+    seed: int = 1,
 ) -> dict:
-    """Record exact shared RTL, simulation tools, observer, native inputs, checkpoint and vendor reports."""
+    """Record the requested seed and content identities for replay, native implementation and vendor reports."""
     build = json.loads(router.with_name("spacetime-build.json").read_text())["sha256"]
     require(digest(router) == build["nextpnr-spacetime"], "nextpnr build mismatch")
     lut_patch = "nextpnr-xc7-lut-route-delay.patch"
@@ -283,7 +285,7 @@ def identities(
         "archive": ARCHIVE,
         "part": "xc7z030sbg485-1",
         "periodNs": 20,
-        "seed": 1,
+        "seed": seed,
         "nativeStage": mode,
         **({"routedLutTiming": True} if mode == "routed" and lut_patch in build else {}),
         "pins": {"clock": "Y14", "activity": "V13"},

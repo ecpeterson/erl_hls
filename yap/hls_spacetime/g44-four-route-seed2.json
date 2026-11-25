@@ -1,0 +1,242 @@
+{
+  "archive": "runs/spacetime-g4-parity-2026-11-24/decoder-four-route-seed2",
+  "inventorySha256": "77f9a7bb43617fe325be8f90f0e6ec60124cee88b9dec77e914ae8d56d932e7d",
+  "evidenceTarSha256": "d9273b7f6bcd3d2d93eb178ed9289778416743e88c5fe7bedc2b90b74c7662e9",
+  "checkpoint": "9fd7a785fc79b1a10cfddc1f45335f8aded5dae2b7bae0852fde448201bf34c8",
+  "gallery": "b886a8a8785c4b297ef9aaa4fabf1e759d9e35d9b723ba9766150e500b67023e",
+  "part": "xc7z030sbg485-1",
+  "guard": {
+    "seconds": 652.2952675838023,
+    "peak_group_rss_bytes": 1967505408,
+    "exit": 0,
+    "guard": null,
+    "remaining_group": []
+  },
+  "input": {
+    "original": "dd15b35c1d78603932db09dd40496ef915cdb2f946aad7c221f71b3eb9a6f2d9",
+    "input": "b2742a930a0563918a0533ab73b5cb1006d221d0992d924777c19d1a4fbac6ad",
+    "changedOnly": [
+      "settings.seed",
+      "settings.seed.arg",
+      "settings.timing_driven"
+    ],
+    "slot": "after all serial application simulations",
+    "seed": 2,
+    "timingDriven": false,
+    "maxStall": 200,
+    "maxIter": 600,
+    "seconds": 3600,
+    "groupRssBytes": 6442450944,
+    "tool": "766908c1aaea8099051784febd4364a6f68fdba968eb5159a5c197ea5d037729",
+    "chipdb": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba"
+  },
+  "routing": {
+    "iteration": 78,
+    "usedWires": 1468539,
+    "fixedPips": 1449569,
+    "fixedNets": 74256
+  },
+  "configuredCells": 70063,
+  "foldedGround": {
+    "routed": "9fd7a785fc79b1a10cfddc1f45335f8aded5dae2b7bae0852fde448201bf34c8",
+    "cellConfig": "1fe6971909a431f45415739193d66cdb1e2228b0b8339917a6ab69d5be347cfa",
+    "fasm": "5bbeae31c0c7ff13525234a2832274bcc1af43ebbbef48a2070e6f57b7d621e7",
+    "buffers": {
+      "$PACKER_GND_NET$LUT$2420": {
+        "bel": "SLICE_X62Y179/B5LUT",
+        "tile": "CLBLM_L_X42Y179",
+        "init64": "1010101010101010101010101010101000000000000000000000000000000000",
+        "O5": 0,
+        "allAddresses": 32,
+        "feature": "CLBLM_L_X42Y179.SLICEM_X0.BLUT.INIT[63:0] = 64'b1010101010101010101010101010101000000000000000000000000000000000"
+      },
+      "$PACKER_GND_NET$LUT$2424": {
+        "bel": "SLICE_X62Y179/C5LUT",
+        "tile": "CLBLM_L_X42Y179",
+        "init64": "1111111100000000111111110000000000000000000000000000000000000000",
+        "O5": 0,
+        "allAddresses": 32,
+        "feature": "CLBLM_L_X42Y179.SLICEM_X0.CLUT.INIT[63:0] = 64'b1111111100000000111111110000000000000000000000000000000000000000"
+      },
+      "$PACKER_GND_NET$LUT$2428": {
+        "bel": "SLICE_X62Y179/D5LUT",
+        "tile": "CLBLM_L_X42Y179",
+        "init64": "1100110011001100110011001100110000000000000000000000000000000000",
+        "O5": 0,
+        "allAddresses": 32,
+        "feature": "CLBLM_L_X42Y179.SLICEM_X0.DLUT.INIT[63:0] = 64'b1100110011001100110011001100110000000000000000000000000000000000"
+      }
+    }
+  },
+  "native": {
+    "timedConnections": 253938,
+    "nonclockConnections": 278924,
+    "timedCellArcs": 371086,
+    "omittedLaunches": {
+      "io": 2,
+      "constant": 24984
+    },
+    "coverage": {
+      "permuted": 120979,
+      "switchVisits": 4651919,
+      "zeroSwitch": 3482,
+      "routed": 132959
+    },
+    "identityBuffers": 4678
+  },
+  "nativeFunctionalArcs": {
+    "timedStructuralArcPairs": {
+      "LUT5": 39745,
+      "LUT4": 27920,
+      "LUT2": 10564,
+      "LUT3": 16506,
+      "LUT6": 49182,
+      "MUXF7": 24,
+      "MUXF8": 9,
+      "LUT1": 3528,
+      "CARRY4": 17443
+    },
+    "missing": {},
+    "dspMissing": []
+  },
+  "activity": {
+    "openxc7": {
+      "timedConnections": 253938,
+      "monitoredPins": 16291,
+      "knownPinTransitions": 5407559,
+      "changingWithoutTimedOutput": {
+        "OBUF": 1
+      },
+      "matchedSrlSamples": 12288
+    },
+    "vivado": {
+      "timedConnections": 273349,
+      "monitoredPins": 7770,
+      "knownPinTransitions": 2547936,
+      "changingWithoutTimedOutput": {
+        "OBUF": 1
+      },
+      "matchedSrlSamples": 12288
+    }
+  },
+  "timing": {
+    "printedCriticalPath": {
+      "start": "$auto$ff.cc:337:slice$64046.Q",
+      "end": "$auto$ff.cc:337:slice$63631.CE",
+      "fmax": {
+        "achieved": 14.7,
+        "constraint": 50.0
+      },
+      "netHops": 26,
+      "switchSumPs": 64317,
+      "wireVisits": 483,
+      "logicNs": 3.7,
+      "printedWireNs": 64.3
+    },
+    "schedulerBit84": {
+      "ram": [
+        "decoder.scheduler_2_state.memory.0.2",
+        "DOADO11"
+      ],
+      "dsp": [
+        "$flatten\\decoder.\\application.\\__phi_decoder_profile_topology__SchedulerGrid_0_next_inst.\\__phi_halo_cell__SharedService_0__2_2_2_2_next_inst.\\__phi_halo_cell__SharedExecutor_0_next_inst.$mul$/Users/ecpeterson/Documents/code/erl_xls/_build/g4-four-phi/erl-hls-vivado-20260921/bundle/inputs/phi/phi_decoder_profile.v:4278$4808.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.sliceA[0].mul.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.genblk1.sliceB[0].mul",
+        "A8"
+      ],
+      "netHops": 9,
+      "wirePs": 10028,
+      "cellPs": 3950,
+      "wireVisits": 85
+    },
+    "active": {
+      "1": {
+        "vivado": [
+          2,
+          4
+        ],
+        "openxc7": [
+          0,
+          2
+        ]
+      },
+      "2": {
+        "vivado": [
+          2,
+          5
+        ],
+        "openxc7": [
+          1,
+          3
+        ]
+      },
+      "11": {
+        "vivado": [
+          1557,
+          3467
+        ],
+        "openxc7": [
+          1256,
+          2783
+        ]
+      },
+      "32": {
+        "vivado": [
+          4178,
+          13765
+        ],
+        "openxc7": [
+          3075,
+          19073
+        ]
+      },
+      "90": {
+        "vivado": [
+          3700,
+          16571
+        ],
+        "openxc7": [
+          4619,
+          47756
+        ]
+      }
+    }
+  },
+  "selectedPath": {
+    "vivado": {
+      "rows": 50,
+      "sdfNs": 10.5207,
+      "knownChanges": {
+        "ram": 650,
+        "dsp": 0
+      }
+    },
+    "openxc7": {
+      "rows": 18,
+      "sdfNs": 13.978,
+      "knownChanges": {
+        "ram": 650,
+        "dsp": 961
+      }
+    }
+  },
+  "browserPicks": {
+    "SRL16E": {
+      "cycle": 2,
+      "picked": [
+        "1.102 \u2192 1.541 ns \u00b7 7 switch-tile visits \u00b7 permuted LUT input \u00b7 routed wire delay \u00b7 SDF 0.439 ns \u00b7 traced switch sum 0.439 ns \u00b7 $auto$ff.cc:337:slice$77381/O6 \u2192 $abc$1288415$lut$0\\flow[31:0]/A2 \u00b7 sampled output bit changed"
+      ]
+    },
+    "SRLC32E": {
+      "cycle": 1,
+      "picked": [
+        "1.109 \u2192 2.095 ns \u00b7 11 switch-tile visits \u00b7 routed wire delay \u00b7 SDF 0.986 ns \u00b7 traced switch sum 0.986 ns \u00b7 $auto$ff.cc:337:slice$77363/O6 \u2192 $auto$ff.cc:337:slice$77381/DI2 \u00b7 sampled output bit changed"
+      ]
+    },
+    "RAMB36E1": {
+      "cycle": 11,
+      "picked": [
+        "2.080 \u2192 3.276 ns \u00b7 13 switch-tile visits \u00b7 routed wire delay \u00b7 SDF 1.196 ns \u00b7 traced switch sum 1.196 ns \u00b7 decoder.scheduler_2_mailbox.memory.0.0/DOADO0 \u2192 $auto$ff.cc:337:slice$75627/D \u00b7 sampled output bit changed"
+      ]
+    }
+  },
+  "scope": "Matched functional replays across 4096 settled clocks; shared mapping, checked routed configuration, timing estimates and directed intra-clock geometry on XC7Z030-1. Single openXC7 timing model."
+}

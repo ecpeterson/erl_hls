@@ -14,7 +14,7 @@ from routed_flow import route_result, trace
 from openxc7_tree import RouteTree
 from unittest.mock import Mock, patch
 from init_bits import configured
-from packed_buffers import append_buffers, input_sources
+from packed_buffers import append_buffers, folded_ground, input_sources
 from pack import asset
 from pin_activity import native_pins, read_asset, replay_pins, transitions
 from scopes import links
@@ -112,6 +112,37 @@ class WorkloadTest(unittest.TestCase):
             self.assertEqual(read_asset(g, b["entire"]), bytes([7, 7]))
         cells["buf"]["parameters"]["INIT"] = "01"
         self.assertEqual(input_sources(cells, ["carry"]), {"ground": None})
+
+    def test_folded_ground_configuration(self) -> None:
+        """Only an explicit, matching all-zero O5 table qualifies an input-elided buffer."""
+        cell = packed("SLICE_LUTX", {"A2": 9}, {"O5": 2})
+        cell.update(
+            parameters={"INIT": "10"},
+            attributes={
+                "X_ORIG_TYPE": "LUT1",
+                "X_ORIG_PORT_O5": "O",
+                "NEXTPNR_BEL": "SLICE_X62Y179/B5LUT",
+            },
+        )
+        grid = Mock()
+        grid.location.return_value = {"tile": "CLBLM_L_X42Y179"}
+        feature = "CLBLM_L_X42Y179.SLICEM_X0.BLUT.INIT[63:0] = 64'b"
+        cells = {"buf": cell}
+        with tempfile.TemporaryDirectory() as tmp:
+            config = Path(tmp) / "cells.fasm"
+            for data, expected in (
+                ("", set()),
+                (feature.replace("BLUT", "DLUT") + "0" * 64, set()),
+                (feature + "0" * 63 + "1", set()),
+                (feature + "1" * 32 + "0" * 32, {"buf"}),
+            ):
+                config.write_text(data + "\n")
+                self.assertEqual(folded_ground(cells, grid, config), expected)
+            ground = folded_ground(cells, grid, config)
+            self.assertEqual(input_sources(cells, []), {})
+            self.assertEqual(input_sources(cells, [], ground), {"buf": None})
+            cell["attributes"]["X_ORIG_PORT_A2"] = "I0"
+            self.assertEqual(folded_ground(cells, grid, config), set())
 
     def test_split_ram_and_srl_launches(self) -> None:
         """Launch only from the connected SDF clock half and keep SRL data on the preceding edge."""

@@ -10,10 +10,63 @@ import struct
 import tempfile
 
 from pack import ChipGrid, asset, digest, require
-from packed_buffers import append_buffers, input_sources
+from packed_buffers import append_buffers, folded_ground, input_sources
 from pin_activity import attach_pins, bindings, native_pins, read_asset, replay_pins
 from placed_flow import placed_rows
 from routed_flow import NEXTPNR_COMMIT, ROW, WireNames, geometry
+
+
+def direct_operand(gallery: Path, replay: dict, backend: str, model: dict) -> dict:
+    """Index the verified transaction's RAM clock through its first DSP operand on a single clock interval."""
+    path = json.loads((gallery / f"{backend}.json").read_bytes())["hardwarePath"]
+    require(
+        path["checkpoint"] == replay["checkpoints"][backend], "transaction checkpoint"
+    )
+    capture = replay["backends"][backend]
+    names = read_asset(gallery, capture["names"]).decode().splitlines()
+    ids = {name: i for i, name in enumerate(names)}
+    cells = read_asset(gallery, capture["catalogue"])
+    required = []
+    for src, sink in zip(path["steps"], path["steps"][1:]):
+        a, z = ids[src["cell"]], ids[sink["cell"]]
+        kind = capture["kinds"][cells[a * 7 + 4]]
+        require(
+            kind.startswith("RAMB") if not required else kind.startswith(("LUT", "MUX", "CARRY")),
+            "storage boundary on direct operand path",
+        )
+        pin = src["input"] or model["selected"][0]["cellInput"]
+        required.extend(
+            ((a, pin, a, src["output"]), (a, src["output"], z, sink["input"]))
+        )
+        if capture["kinds"][cells[z * 7 + 4]] == "DSP48E1":
+            break
+    else:
+        raise ValueError("missing DSP on selected path")
+    lookup = dict.fromkeys(required)
+    pins = read_asset(gallery, model["pins"])
+    edges = read_asset(gallery, model["edges"])
+    for i, (a, z, _, _) in enumerate(ROW.iter_unpack(edges)):
+        src, sink = model["ports"][struct.unpack_from("<H", pins, 2 * i)[0]]
+        key = a, src, z, sink
+        if key in lookup:
+            require(lookup[key] is None, "ambiguous selected timing row")
+            lookup[key] = i
+    rows = [lookup[key] for key in required]
+    require(all(row is not None for row in rows), "incomplete selected timing rows")
+    activity = model["outputActivity"]
+    lanes = read_asset(gallery, activity["rows"])
+    changes = read_asset(gallery, activity["changes"])
+    stride = (activity["count"] + 7) // 8
+    transitions = {}
+    for label, row in (("ram", rows[1]), ("dsp", rows[-1])):
+        (lane,) = struct.unpack_from("<h", lanes, 2 * row)
+        require(lane >= 0, "selected path endpoint has no pin replay")
+        transitions[label] = [
+            cycle
+            for cycle in range(replay["cycles"])
+            if changes[cycle * stride + lane // 8] & (1 << (lane % 8))
+        ]
+    return dict(rows=rows, transitions=transitions)
 
 
 def routed_assets(
@@ -100,10 +153,13 @@ def rebuild_timing(
     previous: dict,
     flow: dict,
     replay: dict,
+    ground: set[str],
 ) -> dict:
     """Replace native timing and its row-indexed assets as a unit on the same checkpoint."""
     routed = "routed" in flow
-    rows, ports, pins, stats = placed_rows(top, args.sdf, names, routed=routed)
+    rows, ports, pins, stats = placed_rows(
+        top, args.sdf, names, routed=routed, ground=ground
+    )
     stage = "routed" if routed else "placed"
     model = dict(
         **stats,
@@ -119,6 +175,10 @@ def rebuild_timing(
             revision=receipt["commit"],
             executable=receipt["sha256"]["nextpnr-spacetime"],
             buildReceipt=digest(args.sdf_build),
+        )
+    if args.lut_config:
+        model["foldedGround"] = dict(
+            cells=len(ground), configuration=digest(args.lut_config)
         )
     if routed:
         model.update(
@@ -159,6 +219,18 @@ def publish(args: argparse.Namespace) -> None:
         )
         top = json.loads(args.checkpoint.read_bytes())["modules"]["top"]
         cells = top["cells"]
+        ground = set()
+        if args.lut_config:
+            require(
+                capture["nativeStage"] == "routed"
+                and digest(args.lut_config) == capture.get("lutConfigurationSha256"),
+                "routed LUT configuration identity",
+            )
+            with (
+                args.chipdb.open("rb") as fp,
+                mmap.mmap(fp.fileno(), 0, access=mmap.ACCESS_READ) as db,
+            ):
+                ground = folded_ground(cells, ChipGrid(db), args.lut_config)
         for backend, folder in (
             ("openxc7", args.native_pins),
             ("vivado", args.vivado_pins),
@@ -170,7 +242,7 @@ def publish(args: argparse.Namespace) -> None:
             packed = cells if native else None
             if native:
                 require(checkpoint == model["checkpoint"], "native timing checkpoint")
-                sources = input_sources(cells, names)
+                sources = input_sources(cells, names, ground)
                 expected = native_pins(names, cells)
             else:
                 sources = {}
@@ -212,12 +284,17 @@ def publish(args: argparse.Namespace) -> None:
                         gallery, replay, cells, grid, values, sources
                     )
                     model = rebuild_timing(
-                        args, gallery, top, grid, physical, model, flow, replay
+                        args, gallery, top, grid, physical, model, flow, replay, ground
                     )
                 model["identityBuffers"] = len(sources)
             attach_pins(
                 gallery, b, model, packed, replay["checkpoints"][backend], pins, changes
             )
+            selected = replay.get("selectedPath", {}).get("steps", [])
+            if selected and "routed" in replay["flow"]["openxc7"] and all(
+                step["kind"] != "SLICE_FFX" for step in selected
+            ):
+                model["directOperand"] = direct_operand(gallery, replay, backend, model)
         manifest.write_text(json.dumps(replay, separators=(",", ":")) + "\n")
         gallery.rename(args.output)
 
@@ -235,6 +312,6 @@ if __name__ == "__main__":
         "output",
     ):
         parser.add_argument("--" + option, type=Path, required=True)
-    for option in ("fixed", "wire-delays", "constids", "sdf-build"):
+    for option in ("fixed", "wire-delays", "constids", "sdf-build", "lut-config"):
         parser.add_argument("--" + option, type=Path)
     publish(parser.parse_args())

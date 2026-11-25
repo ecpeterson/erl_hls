@@ -48,6 +48,7 @@ def placed_rows(
     *,
     routed: bool = False,
     selected_ps: dict | None = None,
+    ground: frozenset[str] | set[str] = frozenset(),
 ) -> tuple:
     """Check SDF nets against packed bits; accumulate modeled delays from real launch pins in ps."""
     cells = placed["cells"]
@@ -187,7 +188,7 @@ def placed_rows(
         usedCellArcs=len(arcs),
     )
     omitted = Counter()
-    origins = {}
+    origins = {(ids[name], "O5"): "constant" for name in ground}
 
     def launch_origin(pin: tuple) -> str:
         """Classify a missing driver by its actual primitive, following packed identity LUT inputs."""

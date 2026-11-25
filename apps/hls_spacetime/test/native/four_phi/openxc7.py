@@ -168,8 +168,8 @@ def visit(cell: dict, name: str, inp: str | None, out: str | None) -> dict:
     return row
 
 
-def placed_path(directory: Path, mode: str) -> dict:
-    """Cross-check synthesis lane, packed cell, source port, checkpoint stage and connectivity."""
+def placed_path(directory: Path, mode: str, *, seed: int = 1) -> dict:
+    """Check the saved seed, stage and synthesis lane before tracing the packed RAM-to-DSP path."""
     synth = json.loads((directory / "synth.json").read_bytes())["modules"][
         "phi_timing_harness"
     ]
@@ -208,7 +208,7 @@ def placed_path(directory: Path, mode: str) -> dict:
     require(
         bool(int(settings.get("route", "0"), 2)) == (mode == "routed")
         and float(settings["target_freq"]) == 50e6
-        and int(settings["seed.arg"], 2) == 1
+        and int(settings["seed.arg"], 2) == seed
         and settings["placer"] == "heap"
         and settings["router"] == "router2",
         "native route or clock constraint",
