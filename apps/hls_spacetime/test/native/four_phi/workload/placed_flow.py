@@ -84,6 +84,8 @@ def placed_rows(
     (clock,) = [ids[n] for n, c in cells.items() if c["type"] == "BUFGCTRL"]
     nets, arcs, sources, sinks, seeds = [], [], set(), set(), {}
     stats = Counter()
+    dsp_clocks = set()
+    registered_products = set()
     seen = set()
     cell = None
     kind = None
@@ -132,6 +134,8 @@ def placed_rows(
                         stats["clockLoads"] += 1
                         if b[1] in ("CK", "CLKARDCLK", "CLKBWRCLK"):
                             seeds[b] = 0
+                        elif b[1] == "CLK" and objects[b[0]]["type"] == "DSP48E1_DSP48E1":
+                            dsp_clocks.add(b)
                     else:
                         nets.append((a, b, ps))
                 else:
@@ -144,6 +148,13 @@ def placed_rows(
                         and modeled_arc(objects[cell], src, dst)
                     ):
                         arcs.append((a, b, ps))
+                        if a in dsp_clocks and re.fullmatch(r"P[0-9]+", dst):
+                            seeds[a] = 0
+                            params = objects[cell]["parameters"]
+                            if cell in observed and all(
+                                int(params.get(p, "0"), 2) == 1 for p in ("MREG", "PREG")
+                            ):
+                                registered_products.add(observed[cell])
     require(
         len(seen) == len(cells) and sinks == expected_sinks and seeds,
         "incomplete placed SDF",
@@ -189,7 +200,10 @@ def placed_rows(
                 )
             )
             stats["timed" + key] += 1
-    return rows, list(ports), pin_ids, dict(stats)
+    coverage = dict(stats)
+    if registered_products:
+        coverage["registeredProducts"] = sorted(registered_products)
+    return rows, list(ports), pin_ids, coverage
 
 
 def publish(gallery: Path, run: Path, router: Path, chipdb: Path, output: Path) -> None:

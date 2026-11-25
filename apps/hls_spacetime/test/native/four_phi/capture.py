@@ -258,12 +258,13 @@ def identities(
     """Record exact shared RTL, simulation tools, observer, native inputs, checkpoint and vendor reports."""
     build = json.loads(router.with_name("spacetime-build.json").read_text())["sha256"]
     require(digest(router) == build["nextpnr-spacetime"], "nextpnr build mismatch")
-    patch = "nextpnr-xc7-lut-route-delay.patch"
-    if patch in build:
-        require(
-            build[patch] == digest(ROOT / "platforms/xc7/timing_coverage" / patch),
-            "LUT timing overlay",
-        )
+    for model in (
+        "nextpnr-xc7-lut-route-delay.patch",
+        "nextpnr-spacetime-registered-dsp.patch",
+        "registered_dsp.inc",
+    ):
+        if model in build:
+            require(build[model] == digest(ROOT / "platforms/xc7/timing_coverage" / model), model)
     tools = {
         "yosys": yosys,
         "yosys-executable": yosys.parent.parent / "libexec/yosys",

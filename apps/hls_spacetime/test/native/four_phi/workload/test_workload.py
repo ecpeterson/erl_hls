@@ -2,12 +2,13 @@
 
 import json
 import shutil
+import struct
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
-from flow import ROW, arrivals, route_geometry, vivado
+from flow import ROW, arrivals, native, route_geometry, vivado
 from placed_flow import placed_rows
 from routed_flow import route_result, trace
 from openxc7_tree import RouteTree
@@ -20,6 +21,24 @@ import vivado_lane
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 from capture import check_mapping_log
+
+
+def packed(kind: str, inputs: dict, outputs: dict) -> dict:
+    """Build a scalar packed cell with distinct bit and direction records."""
+    return dict(
+        type=kind,
+        attributes={},
+        connections={p: [b] for p, b in (inputs | outputs).items()},
+        port_directions={
+            **dict.fromkeys(inputs, "input"),
+            **dict.fromkeys(outputs, "output"),
+        },
+    )
+
+
+def delay(tag: str, a: str, b: str, n: int) -> str:
+    """Emit one nextpnr delay record with equal rise and fall values in ps."""
+    return f"({tag} {a} {b} ({n}:{n}:{n}) ({n}:{n}:{n}))"
 
 
 class WorkloadTest(unittest.TestCase):
@@ -82,18 +101,6 @@ class WorkloadTest(unittest.TestCase):
     def test_placed_flow(self) -> None:
         """Keep per-pin delay on a reconvergent sink and reject a missing or incorrectly joined branch."""
 
-        def packed(kind: str, inputs: dict, outputs: dict) -> dict:
-            """Build a scalar packed cell with distinct bit and direction records."""
-            return dict(
-                type=kind,
-                attributes={},
-                connections={p: [b] for p, b in (inputs | outputs).items()},
-                port_directions={
-                    **dict.fromkeys(inputs, "input"),
-                    **dict.fromkeys(outputs, "output"),
-                },
-            )
-
         cells = {
             "clock": packed("BUFGCTRL", {}, {"O": 1}),
             "ff": packed("SLICE_FFX", {"CK": 1, "D": 5}, {"Q": 2}),
@@ -113,10 +120,6 @@ class WorkloadTest(unittest.TestCase):
             "slow": [("A", "O", 1000)],
             "join": [("A", "O", 50), ("B", "O", 80)],
         }
-
-        def delay(tag: str, a: str, b: str, n: int) -> str:
-            """Emit one nextpnr delay record with equal rise and fall values in ps."""
-            return f"({tag} {a} {b} ({n}:{n}:{n}) ({n}:{n}:{n}))"
 
         text = "\n".join(
             [
@@ -146,6 +149,61 @@ class WorkloadTest(unittest.TestCase):
                 sdf.write_text(bad)
                 with self.assertRaises(ValueError):
                     placed_rows(design, sdf, list(cells))
+
+    def test_registered_dsp_depth(self) -> None:
+        """The cell-depth view cuts feedback at P and rejects mixed registered and bypass outputs."""
+        cells = {
+            "dsp": packed("DSP48E1", {"CLK": 1, "A": 2}, {"P": 3}),
+            "lut": packed("LUT1", {"I": 3}, {"O": 2}),
+        }
+        cells["dsp"]["parameters"] = {"PREG": "1"}
+        design = {"modules": {"phi_timing_harness": {"cells": cells}}}
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "synth.json"
+            path.write_text(json.dumps(design))
+            self.assertEqual(native(path, list(cells))[0], [(0, 1, 0, 1), (1, 0, 1, 2)])
+            cells["dsp"]["connections"]["ACOUT"] = [4]
+            cells["dsp"]["port_directions"]["ACOUT"] = "output"
+            path.write_text(json.dumps(design))
+            with self.assertRaisesRegex(ValueError, "additional outputs"):
+                native(path, list(cells))
+
+    def test_registered_dsp_launch(self) -> None:
+        """Keep the multiplier cycle boundary even when the input arrives later than P launches."""
+        cells = {
+            "clk": packed("BUFGCTRL", {}, {"O": 1}),
+            "ff": packed("SLICE_FFX", {"CK": 1, "D": 3}, {"Q": 2}),
+            "mul": packed("DSP48E1_DSP48E1", {"CLK": 1, "A0": 2}, {"P0": 3}),
+        }
+        cells["mul"]["parameters"] = {"MREG": "1", "PREG": "1"}
+        base = "\n".join([
+            "(TIMESCALE 1ps)", '(CELLTYPE "top")', "(INSTANCE )",
+            delay("INTERCONNECT", "clk/O", "ff/CK", 500),
+            delay("INTERCONNECT", "clk/O", "mul/CLK", 500),
+            delay("INTERCONNECT", "ff/Q", "mul/A0", 500),
+            delay("INTERCONNECT", "mul/P0", "ff/D", 500),
+            '(CELLTYPE "BUFGCTRL")', "(INSTANCE clk)",
+            '(CELLTYPE "SLICE_FFX")', "(INSTANCE ff)", delay("IOPATH", "CK", "Q", 500),
+            '(CELLTYPE "DSP48E1_DSP48E1")', "(INSTANCE mul)",
+        ])
+        with tempfile.TemporaryDirectory() as tmp:
+            sdf = Path(tmp) / "design.sdf"
+            for qualified in (False, True):
+                sdf.write_text(base + ("\n" + delay("IOPATH", "CLK", "P0", 383) if qualified else ""))
+                data, ports, ids, stats = placed_rows(dict(cells=cells, netnames={}), sdf, list(cells))
+                rows = {
+                    ports[pid]: (a, b, start, end)
+                    for (pid,), (a, b, start, end) in zip(struct.iter_unpack("<H", ids), ROW.iter_unpack(data))
+                }
+                self.assertAlmostEqual(rows["Q", "A0"][3], 1)
+                self.assertNotIn(("A0", "P0"), rows)
+                if qualified:
+                    self.assertEqual(stats["registeredProducts"], [2])
+                    self.assertAlmostEqual(rows["P0", "D"][2], 0.383)
+                    self.assertAlmostEqual(rows["CLK", "P0"][2], 0)
+                else:
+                    self.assertNotIn(("P0", "D"), rows)
+                    self.assertNotIn("registeredProducts", stats)
 
     def test_partial_route(self) -> None:
         """Reject truncated or debug-accepted routes even when a checkpoint was emitted."""

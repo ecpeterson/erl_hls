@@ -15,7 +15,11 @@ def write_identity(stage: Path) -> None:
               here / "nextpnr-coverage.patch", here / "nextpnr-spacetime.patch",
               here.parent / "lut_legality/nextpnr-output-pin.patch",
               here.parent / "lut_legality/nextpnr-pin-origins.patch", stage / "bin/nextpnr-spacetime"]
-    bram = (stage / "nextpnr-xilinx-68aeeb39f92e39bfb239c7e4a44dd93451fc1889/xilinx/xc7_bram_model.inc")
+    xilinx = stage / "nextpnr-xilinx-68aeeb39f92e39bfb239c7e4a44dd93451fc1889/xilinx"
+    bram = xilinx / "xc7_bram_model.inc"
+    dsp = xilinx / "registered_dsp.inc"
+    if dsp.exists():
+        inputs.extend([dsp, here / "nextpnr-spacetime-registered-dsp.patch"])
     carry = stage / "nextpnr-spacetime-carry.patch"
     if carry.exists():
         inputs.append(carry)

@@ -232,16 +232,23 @@ The two-worker and original four-worker Vivado inventories contain the same prim
 
 The original exporter retained pre-rename port labels. The packer overlay now moves the original pin name with the SRL address, data and output port. On fresh routes the live addresses bind to A2–A5 and A2–A6 respectively. Native SDF now lists all four and five address paths to Q at 124 ps each and drops the spurious A1 path. The value comes from a generic LUT model. Clock-to-Q and data/enable setup and hold are still absent, so timed flow continues to exclude these storage arcs. [Original SRL witness](../../yap/hls_spacetime/g44-srl-taps.json) · [Overlay results](../../yap/hls_spacetime/g44-pin-coverage.json)
 
-The 10 ns XC7Z030-1 DSP micro design retains a DSP48E1 with MREG and PREG enabled and both operand registers bypassed on each backend. The two mapped UNISIM replays agreed on 512 signed operand pairs and M-register products, and all 511 next-clock P captures. Vivado reports a maximum 383 ps CLK → P[47:0] and 42 setup/hold records. Its SDF exposes the external pins of the DSP. The internal M stage was observed in the functional model. The openXC7 routed SDF has an empty cell entry for this registered mode. [DSP witness](../../yap/hls_spacetime/g44-pin-coverage.json)
+#### Registered DSP multiplier
+
+The 10 ns XC7Z030-1 micro design uses the same two DSP48E1 register stages in both implementations. A and B bypass their input registers. On each enabled edge MREG captures the signed product and PREG captures the previous M value. Both mapped functional replays matched all 512 operand pairs and products and all 511 following P captures. [Original empty native SDF and simulation witness](../../yap/hls_spacetime/g44-pin-coverage.json)
+
+The openXC7 overlay uses the slowest pin values from the routed Vivado SDF for the witnessed direct multiply mode. Native SDF emits CLK → P at 383 ps on all 48 pins and both-edge setup/hold checks on 52 scalar A, B, CEM, CEP, RSTM and RSTP pins. All 104 checks match their Vivado counterparts, including the signed hold values. Eleven ranked native STA endpoints terminate at an A or B pin and include its measured setup increment. Changing the operation, bypassing MREG or inverting CLK leaves the model unqualified.
+
+Both timed flow exports show the 43 consumed product bits launching from PREG at 0.383 ns. The native viewer keeps the incoming operand paths and the new launch in separate clock intervals. The four-worker application maps this arithmetic differently. All 48 native DSPs bypass MREG and PREG. Eighteen Vivado DSPs use PREG alone. The DSP at `DSP48_X1Y14` has 25 connected CLK → P arcs at 383 ps and its first observed cell change is at C9. Open `registered-dsp/registered-multiplier.html` in the campaign archive to step through both micro replays. Its `evidence.tar.gz` includes the observer, synthesis input and `reproduce.py --guard GUARD --chipdb CHIPDB --output NEW_DIRECTORY` for the seed-1 route. [Pin checks, timing and checkpoint identities](../../yap/hls_spacetime/g44-registered-dsp.json)
 
 To reproduce the named-output replay, restore the two-worker observation archives and overlay the functional netlists and VPI observers from the feature evidence archive (or rebuild the observer from `transitions.cpp` for the host). Run `pin_activity.py --help` next to `pair_two_phi.py` for the gallery, routed checkpoint, work directories and pinned model inputs. The evidence archive retains the switch-delay probe, the row-by-row comparison and the script that attaches its sums.
 
 ## Remaining work
 
+Four campaign items remain. Two concern primitive timing, one concerns native checkpoint import, and output activity expands when a workload exercises a new port.
+
 | Feature to qualify | Smallest existing witness and completion check |
 | --- | --- |
 | Variable-tap storage | Supply a mode-specific address-to-Q model, clock launch and data/enable checks for the two dynamic-tap fixtures, then admit the qualified arcs into timed flow. |
-| Registered DSP arithmetic | Add native CLK-to-P and input timing checks for the witnessed MREG/PREG mode. Keep the internal register cycle explicit in the viewer. |
 | Block RAM write modes | The RAMB36E1 SDP72 READ_FIRST probe covers both output-register settings. Its WRITE_FIRST variant leaves 212 connected ports unqualified. When an application uses that mode, check same-address reads and writes and qualify its mode-specific timing. |
 | Activity on other output ports | Extend the named-pin monitor when another multi-output primitive or port is exercised. |
 | Routed checkpoint import | The original and patched nextpnr binaries both fail in the Series-7 PIP-name import when reopening the routed JSON. Reproduce timing from the frozen placement and seed. Qualify the inverse PIP and wire-name mappings for direct checkpoint reopen. |

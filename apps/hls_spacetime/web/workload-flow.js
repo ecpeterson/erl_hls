@@ -233,6 +233,7 @@ export async function createFlow(replay, catalogs, asset) {
           nativeTiming.timedConnections + nativeTiming.timedCellArcs
         )
           throw Error("Incomplete native timing inventory");
+        pinModel.registeredProducts = new Set(nativeTiming.registeredProducts);
         if (routed) {
           if (
             classes.length !== pinModel.nets ||
@@ -810,7 +811,9 @@ export async function createFlow(replay, catalogs, asset) {
         end.toFixed(3) +
         " ns · " +
         (found.local
-          ? "primitive arc"
+          ? p.model.registeredProducts?.has(a) && pair[0] === "CLK"
+            ? "PREG launch · MREG feeds PREG across a clock edge"
+            : "primitive arc"
           : found.dash
             ? b === "openxc7" && !routed
               ? "unrouted endpoint span"

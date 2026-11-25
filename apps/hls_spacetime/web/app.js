@@ -243,7 +243,7 @@ async function loadDocument(
       model.document.openxc7Computations.arcs.filter(
         (a) => a.timing.basis === "predicted",
       ).length;
-    modelNote.textContent = `nextpnr structural timing · ${predicted} predicted net delays · ${nativeTiming.unresolved_delays} unavailable delay queries. Slice flip-flops use compiled clock constants.${nativeTiming.bram_model_sha256 ? " RAM timing is qualified by primitive configuration." : ""}${nativeTiming.carry_di_model ? " Carry DI arcs use placed-site variant maxima." : ""} Per-entry database characterization is unverified.`;
+    modelNote.textContent = `nextpnr structural timing · ${predicted} predicted net delays · ${nativeTiming.unresolved_delays} unavailable delay queries. Slice flip-flops use compiled clock constants.${nativeTiming.bram_model_sha256 ? " RAM timing is qualified by primitive configuration." : ""}${nativeTiming.registered_dsp_model_sha256 ? " With both stages enabled, the qualified multiplier transfers MREG to PREG on the following edge." : ""}${nativeTiming.carry_di_model ? " Carry DI arcs use placed-site variant maxima." : ""} Per-entry database characterization is unverified.`;
   }
   const routes = nativeRoutes(model);
   const routeIndex = new Map(

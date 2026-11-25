@@ -154,13 +154,17 @@ export function openxc7Computations(
     if (!raw || raw.type !== cell.type)
       throw Error("Packed timing cell mismatch");
     const kind = cell.type;
-    const cellBoundary =
-      modelInfo.bram_model_sha256 &&
-      /^(RAMB18E1_RAMB18E1|RAMB36E1_RAMB36E1)$/.test(kind)
-        ? "hard_block"
-        : groundedBuffer(cell, raw, constants)
-          ? "constant"
-          : boundary(cell);
+    const clockedBlock =
+      (modelInfo.bram_model_sha256 &&
+        /^(RAMB18E1_RAMB18E1|RAMB36E1_RAMB36E1)$/.test(kind)) ||
+      (modelInfo.registered_dsp_model_sha256 &&
+        kind === "DSP48E1_DSP48E1" &&
+        Object.values(raw.ports).some((p) => p.class === "register_output"));
+    const cellBoundary = clockedBlock
+      ? "hard_block"
+      : groundedBuffer(cell, raw, constants)
+        ? "constant"
+        : boundary(cell);
     const index = cells.length;
     cells.push({ id, kind, boundary: cellBoundary });
     for (const [port, p] of Object.entries(raw.ports)) {

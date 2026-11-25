@@ -277,3 +277,34 @@ test("only a corroborated packer buffer with a constant configured LUT half stop
     assert.equal(boundary(p, c), "combinational");
   }
 });
+
+test("the registered DSP model exposes a clocked P frontier", async (t) => {
+  const { view } = await sourceFixture(t);
+  const type = "DSP48E1_DSP48E1";
+  const packed = { dsp: { type, attributes: {} } };
+  const clock = { port: "CLK", edge: "rising", clock_to_q_ps: 383 };
+  for (const [model, enabled, expected] of [
+    [{ registered_dsp_model_sha256: "test" }, true, "hard_block"],
+    [{ registered_dsp_model_sha256: "test" }, false, "unsupported"],
+    [{}, true, "unsupported"],
+  ]) {
+    const ports = {
+      P0: {
+        net: "product",
+        direction: "OUT",
+        class: enabled ? "register_output" : "ignore",
+        clocks: enabled ? [clock] : [],
+      },
+    };
+    const result = openxc7Computations(
+      view,
+      packed,
+      { cells: { dsp: { type, ports, arcs: [] } }, sinks: [] },
+      [],
+      model,
+    );
+    assert.equal(result.cells[0].boundary, expected);
+    assert.deepEqual(result.pins[0].clocks, ports.P0.clocks);
+    assert.equal(result.arcs.length, 0);
+  }
+});

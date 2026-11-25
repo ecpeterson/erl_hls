@@ -118,6 +118,18 @@ def native(synth, names):
             roots[i] = 0
         elif kind.startswith(("LUT", "MUXF")) or kind in {"CARRY4", "INV", "OBUF"}:
             combinational.add(i)
+        elif kind == "DSP48E1" and int(c["parameters"]["PREG"], 2) == 1:
+            # A cell-level depth root is valid only when every consumed output is registered P.
+            require(
+                len(c["connections"]["CLK"]) == 1
+                and isinstance(c["connections"]["CLK"][0], int)
+                and all(
+                    pin == "P" or c["port_directions"][pin] != "output" or not bits
+                    for pin, bits in c["connections"].items()
+                ),
+                "registered DSP with additional outputs or no clock",
+            )
+            roots[i] = 0
         elif kind == "DSP48E1":
             require(
                 c["connections"]["CLK"] == ["0"]

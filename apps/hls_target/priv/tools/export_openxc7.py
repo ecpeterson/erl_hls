@@ -322,6 +322,8 @@ def capture(args: argparse.Namespace) -> None:
             manifest["timing"]["lut_route_delay_patch_sha256"] = build["sha256"][lut_delay_patch]
         if "nextpnr-spacetime-carry.patch" in build["sha256"]:
             manifest["timing"]["carry_di_model"] = "maximum of available chipdb CARRY4 variants at the placed site"
+        if "registered_dsp.inc" in build["sha256"]:
+            manifest["timing"]["registered_dsp_model_sha256"] = build["sha256"]["registered_dsp.inc"]
         if "xc7_bram_model.inc" in build["sha256"]:
             manifest["timing"]["bram_model_sha256"] = build["sha256"]["xc7_bram_model.inc"]
     write_json(out / "locations.json", locations)

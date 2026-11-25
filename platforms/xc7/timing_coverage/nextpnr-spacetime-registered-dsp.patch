@@ -1,0 +1,48 @@
+--- a/xilinx/arch.cc
++++ b/xilinx/arch.cc
+@@ -2433,10 +2433,7 @@
+                 return true;
+             }
+     } else if (cell->type == id("DSP48E1_DSP48E1")) {
+-        // Combinational DSP48E1 (Phase 1). getPortTimingClass leaves any
+-        // registered config as TMG_IGNORE, so this is only reached when the
+-        // DSP is fully combinational. Conservative per-input delay; the
+-        // accurate per-variant chipdb model is Phase 2. Upstream PR material.
++        // The M and P registers interrupt combinational data flow.
+         if (!dsp48e1IsCombinational(cell))
+             return false;
+         double d = dsp48e1CombInputDelayNS(dspStripBusIndex(fromPort));
+@@ -2451,3 +2448,5 @@
++#include "registered_dsp.inc"
++
+ TimingPortClass Arch::getPortTimingClass(const CellInfo *cell, IdString port, int &clockInfoCount) const
+ {
+     if (cell->type == id_SLICE_LUTX) {
+@@ -2487,10 +2486,12 @@
+         if (port == id("O"))
+             return TMG_COMB_OUTPUT;
+     } else if (cell->type == id("DSP48E1_DSP48E1")) {
+-        // Phase 1: only the fully-combinational DSP48E1. Registered configs
+-        // stay transparent (TMG_IGNORE) exactly as before -> no regression.
+-        if (!dsp48e1IsCombinational(cell))
+-            return TMG_IGNORE;
++        if (!dsp48e1IsCombinational(cell)) {
++            TimingClockingInfo info;
++            auto kind = xc7MultiplyTiming(this, cell, port, info);
++            clockInfoCount = (kind == TMG_REGISTER_INPUT || kind == TMG_REGISTER_OUTPUT) ? 1 : 0;
++            return kind;
++        }
+         IdString base = dspStripBusIndex(port);
+         if (dsp48e1IsTimedOutput(base))
+             return TMG_COMB_OUTPUT;
+@@ -2504,6 +2505,10 @@
+ TimingClockingInfo Arch::getPortClockingInfo(const CellInfo *cell, IdString port, int index) const
+ {
+     TimingClockingInfo info;
++    if (cell->type == id("DSP48E1_DSP48E1")) {
++        xc7MultiplyTiming(this, cell, port, info);
++        return info;
++    }
+     info.setup = getDelayFromNS(0.1);
+     info.hold = getDelayFromNS(0.1);
+     info.clockToQ = getDelayFromNS(0.1);
