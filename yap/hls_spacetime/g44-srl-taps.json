@@ -1,0 +1,127 @@
+{
+  "archive": "runs/spacetime-g4-parity-2026-11-24/srl-tap-coverage",
+  "inventorySha256": "03c9cd52b298e81e54317d171dde1909a3e05cf2cff77cdb78f5e1e51dfc6ec7",
+  "referenceArchive": "runs/spacetime-g4-parity-2026-11-24/vivado-followups",
+  "part": "xc7z030sbg485-1",
+  "clockPeriodNs": 20,
+  "seed": 1,
+  "route": "router2, zero overused wires and no architecture failures in the last iteration for both fixtures",
+  "tools": {
+    "yosys-executable": "beb67bee34580810390f41553a9f012902526d455e6eaa4788d7552b91d34502",
+    "nextpnr": "369e8a856e33270e3888a33206dc58f234b58f2c3f003da7ff0d0f9618661473",
+    "chipdb": "284c21bd2db15d4791eed852dfeba539af04c992adff2b4d813345ac0f77d7ba",
+    "iverilog": "5df81b269e1ff2c965dd00ad5a8071ca17717f416003b3661a18b2dde430e73c",
+    "vvp": "1a9bdf1f40102f64f015514f5069f99a5dd9f9f38de343743ef4c169fb358392"
+  },
+  "bounds": "Serial stages, maximum 240 seconds and 6 GiB group RSS each. A 512-clock functional simulation of mapped netlists, plus separate packed-net and post-route SDF inspection.",
+  "cases": {
+    "srl16e": {
+      "clocks": 512,
+      "addresses": 16,
+      "shifts": 246,
+      "addressOnlyOutputChanges": 109,
+      "outputChanges": 204,
+      "bel": "SLICE_X0Y98/A6LUT",
+      "packedAddress": {
+        "A0": "A2",
+        "A1": "A3",
+        "A2": "A4",
+        "A3": "A5"
+      },
+      "nativeArcMaxPs": {
+        "A2->O6": 124.0,
+        "A3->O6": 124.0,
+        "A1->O6": 124.0
+      },
+      "vivadoArcMaxPs": {
+        "CLK->Q": 1102.0,
+        "A3->Q": 56.0,
+        "A2->Q": 65.0,
+        "A1->Q": 65.0,
+        "A0->Q": 66.0
+      },
+      "nativeSetupHold": [],
+      "vivadoSetupHold": [
+        "CE@CLK",
+        "D@CLK"
+      ],
+      "missingNativeAddressArcs": [
+        "A2",
+        "A3"
+      ],
+      "viewerAdmittedNativeIOPATH": [],
+      "originLabels": {
+        "A2": "A2",
+        "A3": "A3",
+        "A4": null,
+        "A5": null
+      },
+      "sha256": {
+        "micro.v": "766897fcaa2d31aaaccf7769e82bb7be8969bf1bc608d158cd4104aff132a9e4",
+        "mapped.json": "7637bfa29116d30a9bef019815cf8ff6971e94aa2b6eae948c6d48e0ec87a739",
+        "routed.json": "4d134ff6689f4a2afb594ef148b49391ed9edab91810d6d0c5f0ea779e0e319f",
+        "routed.sdf": "0be94e924863fcd08a1b9e932570e5c89bc25af82814d0cf067982dafeaee3b4",
+        "vivado.sdf": "9958d6dbd8154d572b7cde6a66c75b92864bcf4102ae0a66253b05e731777180",
+        "fixed.txt": "696d9447a1c5207eeae8439ba14e67a3b10e36105ba5099462e4bb64c5e6157a",
+        "sim/console.log": "9388ad65625e8b5ba7384a8a442eb2dbb4243d0beb30ff8d9ada75f95b237272",
+        "vivado-samples.txt": "9388ad65625e8b5ba7384a8a442eb2dbb4243d0beb30ff8d9ada75f95b237272"
+      }
+    },
+    "srlc32e": {
+      "clocks": 512,
+      "addresses": 32,
+      "shifts": 246,
+      "addressOnlyOutputChanges": 112,
+      "outputChanges": 217,
+      "bel": "SLICE_X0Y99/A6LUT",
+      "packedAddress": {
+        "A[0]": "A2",
+        "A[1]": "A3",
+        "A[2]": "A4",
+        "A[3]": "A5",
+        "A[4]": "A6"
+      },
+      "nativeArcMaxPs": {
+        "A2->O6": 124.0,
+        "A3->O6": 124.0,
+        "A4->O6": 124.0,
+        "A1->O6": 124.0
+      },
+      "vivadoArcMaxPs": {
+        "CLK->Q": 1109.0,
+        "A[4]->Q": 53.0,
+        "A[3]->Q": 53.0,
+        "A[2]->Q": 53.0,
+        "A[1]->Q": 53.0,
+        "A[0]->Q": 53.0
+      },
+      "nativeSetupHold": [],
+      "vivadoSetupHold": [
+        "CE@CLK",
+        "D@CLK"
+      ],
+      "missingNativeAddressArcs": [
+        "A[3]",
+        "A[4]"
+      ],
+      "viewerAdmittedNativeIOPATH": [],
+      "originLabels": {
+        "A2": "A[2]",
+        "A3": "A[3]",
+        "A4": "A[4]",
+        "A5": null,
+        "A6": null
+      },
+      "sha256": {
+        "micro.v": "0c1c1b656171c7156e4fe5c8255a85317264c63a6e01c1a23555a5f67a2f4d6e",
+        "mapped.json": "085784db7f1010bb057a31bde06dc3736bd2a46c1b1473aeb5c67a3261bd7b02",
+        "routed.json": "4199262cf094553cbe23e4c5027c52e5690d5a860d1c8f84d2011893e48dcc2f",
+        "routed.sdf": "d94861565b73e747891b8c3c944d997ed7bfb2f852e5b11288dfa7e80cef94bc",
+        "vivado.sdf": "05a483f68bcd1a10951c2d0e4f8c48ab0a69933823850a03fa35ce63eea4feaf",
+        "fixed.txt": "f7cfcf9ef1a55cb02e4582ac038204aa9cfa1bc2906f68da69a2cb4dd0862ec4",
+        "sim/console.log": "791c2b8623f046b5c81c4e8d39253d7bfd09695fbc0b3404678ddd7c744cfdcf",
+        "vivado-samples.txt": "791c2b8623f046b5c81c4e8d39253d7bfd09695fbc0b3404678ddd7c744cfdcf"
+      }
+    }
+  }
+}

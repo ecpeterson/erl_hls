@@ -157,6 +157,8 @@ npm --prefix apps/hls_spacetime start -- --data "$PLACED_FLOW"
 
 #### Four-Phi routed parity campaign
 
+The routed two-worker pair already exercises the scheduler RAM, capture register, DSP operand and correction path. Revisit four-worker routing for a specific congestion, fanout or implementation question. Feature coverage uses the smallest design that exercises the missing mode.
+
 1. **Obtain a legal native route.** The stock-map run ended its hour with 2,120 overused wires. Mapping the decoder and harness separately with the corrected SDP72 map retained 64,989 decoder primitives, 48 DSPs and 52 block RAMs. At 20 ns and seed 1 it ended its hour with 80 overused wires. A congestion-only retry of the original frozen placement reached one conflict, then stopped at two after 50 iterations without improvement. Both contested wires carry the same scheduler output bit. Try a different routing seed on that placement and compare the named conflicts before repeating a full placement. The four-worker native gallery still uses placement estimates. [Routing attempts and input identities](../../yap/hls_spacetime/g44-phi-routing.json)
 2. **Bind the replay to that implementation.** Match packed pins, placement and simulated primitives to the routed checkpoint. Repeat the 4,096-clock replay and the public capture-lane checks if synthesis changes. Establish correspondence of the C32–C37 RAM transaction before attaching any route or timing to the comparison.
 3. **Qualify and expand the physical view.** Trace used switches to each sink on scheduler bit 84 first, including the inserted carry-input LUT and any packed LUT input permutation. Check the native model and timing provenance at each hop, then export the whole design. Report routed, direct, predicted and unresolved branches separately for the whole design and for C32. Registered hard-block timing and per-output-bit switching each need their own witnesses.
@@ -204,7 +206,30 @@ The September four-worker RTL produced 704 status frames per plane and zero corr
 
 A read-only Vivado query matched the physical BEL pins at both ends of every unresolved gallery branch. In the two-worker design, 7,293 of 7,533 branches stay inside one site and 240 belong to routed nets. In the four-worker design those counts are 8,371 and 1,490 of 9,861. The archive retains the logical EDIF, endpoint attachments, net route strings and assigned PIPs for resolving the switch paths offline. Offline inspection recovered the selected 55 ps two-worker span through CFFMUX from C6LUT/O6 to CFF/D at SLICE_X6Y21. The current gallery still marks it unresolved. The remaining work is to apply that binding across the gallery and qualify alternate site exits. [Reference inputs and measured coverage](../../yap/hls_spacetime/g44-vivado-references.json)
 
+#### Dynamic shift-register taps
+
+The two-worker and original four-worker Vivado inventories contain the same primitive types. The four-worker openXC7 inventory adds SRL16E and SRLC32E, all with fixed tap addresses. Two small variable-tap fixtures use the same RTL, XC7Z030-1 and 20 ns constraint on both backends. Their openXC7 routes finished with zero conflicts. The native and Vivado mapped simulations agreed with an independent shift-register model on address, enable, input, tap output and captured output at every one of 512 clocks per fixture.
+
+| Selected storage cell | SRL16E | SRLC32E |
+| --- | ---: | ---: |
+| Tap addresses exercised | 16 / 16 | 32 / 32 |
+| Output changes after a disabled shift and a changed address | 109 | 112 |
+| Changing address pins with an openXC7 SDF arc to Q | 2 / 4 | 3 / 5 |
+| Changing address pins with a Vivado SDF arc to Q | 4 / 4 | 5 / 5 |
+| Vivado clock-to-Q delay, slowest reported value | 1,102 ps | 1,109 ps |
+
+The packed signal connections bind logical address bit 0 to physical A2 and the higher bits consecutively above it. The exported original-port labels retain the pre-rename indices. Native SDF omits the two highest changing address pins on each cell, clock-to-Q, and the data and enable setup/hold checks. It also lists an arc from the tied-high A1 pin. Spacetime excludes the generic LUT arcs on a storage cell. To close the gap, repair the pin origins, qualify address-to-Q separately from a clocked shift and check the data/enable timing at the active edge. The archive includes the raw SDFs, routed checkpoints and a reproducible replay. [Pin-level evidence](../../yap/hls_spacetime/g44-srl-taps.json)
+
 ## Remaining work
+
+| Feature to qualify | Smallest existing witness and completion check |
+| --- | --- |
+| Variable-tap storage | Replay the two SRL fixtures above. Require every live tap-address arc, the clock launch and data/enable checks to bind to the correct packed pins before drawing timed flow. |
+| Registered DSP arithmetic | Use the archived micro design with MREG and PREG enabled. Follow one accepted operand across both clock boundaries and check the output cycle and timing arcs. |
+| Block RAM write modes | The RAMB36E1 SDP72 READ_FIRST probe covers both output-register settings. Its WRITE_FIRST variant leaves 212 connected ports unqualified. When an application uses that mode, check same-address reads and writes and qualify its mode-specific timing. |
+| Activity on individual output pins | Toggle one output of a carry chain or multi-output RAM while a sibling output holds steady. Both viewers should highlight only branches sourced by the changing pin. The galleries currently filter on changes to any output of the cell. |
+| Routed delay at permuted LUT inputs | The paired two-worker capture contains 47,289 connections with traced switches and predicted wire delay. Exercise a permuted LUT on a small route and verify the delay lookup at the physical input before expanding to the capture. |
+| Site-internal and alternate-exit geometry | Apply the saved endpoint and switch evidence to the two-worker gallery first. Require an ordered path for each upgraded branch, including the 55 ps capture-mux span. |
 
 1. **Distributed constant ties.** The 2,409 missing global-to-local constant branches are outside this visualization round. Their cut wires remain inspectable.
 2. **Multicorner timing and other hard modes.** The XC7 estimate includes predicted wiring and compiled slice FF clock parameters. A new corner, generated/gated clock relationship, DSP register, SRL tap or RAM configuration needs its own pin, clock and mode evidence. Use a workload that exercises the class, then compare native and vendor reports on matched parts and constraints. The four-Phi replay supplies RAM addresses, enables and read latency for one memory. Same-address read/write collisions were exercised in the smaller inferred-memory witness.
