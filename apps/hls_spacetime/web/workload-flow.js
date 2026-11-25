@@ -131,6 +131,93 @@ export function decodeFlow(
   return { ...model, offsets, words, branches };
 }
 
+/** Group observed changes with no outgoing timed net in this capture, before cycle filters. */
+export function missingFlowDrivers(model, types, kinds, names, entire) {
+  if (entire.length !== 2 * Math.ceil(types.length / 8))
+    throw Error("Incomplete whole-replay mask");
+  const drives = new Uint8Array(types.length);
+  for (let i = 0; i < model.nets; i++)
+    drives[model.data.getUint32(i * 16, true)] = 1;
+  const groups = new Map();
+  for (let i = 0; i < types.length; i++) {
+    if (drives[i] || !changed(entire, i)) continue;
+    const kind = kinds[types[i]];
+    if (!groups.has(kind))
+      groups.set(kind, { kind, count: 0, example: names[i] });
+    groups.get(kind).count++;
+  }
+  return [...groups.values()].sort((a, b) => a.kind.localeCompare(b.kind));
+}
+
+/** Explain the captured timing population independently of the current clock and display filters. */
+function showFlowCoverage(article, backend, timing, model, groups) {
+  const details = article.querySelector(".flow-coverage"),
+    summary = details.querySelector("summary");
+  const note = (message) => {
+    const p = document.createElement("p");
+    p.textContent = message;
+    details.append(p);
+  };
+  if (!timing) {
+    summary.textContent = "Coverage · pin timing unavailable";
+    note("This capture supplies placement and cell-pair logic depth.");
+    return;
+  }
+  const total = timing.nonclockConnections ?? timing.dataConnections;
+  summary.textContent =
+    Number.isSafeInteger(total) && Number.isSafeInteger(model.nets)
+      ? `Capture coverage · ${format(model.nets)} of ${format(total)} data connections timed`
+      : "Coverage · total data connections unreported";
+  if (backend === "openxc7") {
+    note(
+      model.offsets
+        ? "One nextpnr delay estimate per timed connection. Independent fast and slow corners are unavailable."
+        : "One placement-based delay estimate per timed connection. Routed switch geometry and independent timing corners are unavailable.",
+    );
+    if (timing.unreachedConnections !== undefined)
+      note(
+        `${format(timing.unreachedConnections)} connections lack a modeled launch.`,
+      );
+    if (timing.unobservedConnections !== undefined)
+      note(
+        `${format(timing.unobservedConnections)} additional connections lack a replay endpoint.`,
+      );
+  } else {
+    note("Height uses the maximum delay in the captured Vivado SDF.");
+    const omitted = total - model.nets;
+    if (omitted > 0)
+      note(`Connections without a modeled launch · ${format(omitted)}`);
+  }
+  if (model.offsets) {
+    let missing = 0;
+    for (const at of model.offsets) if (model.words[at] === 65535) missing++;
+    note(
+      `Of the timed connections, ${format(missing)} lack resolved branch geometry.`,
+    );
+  }
+  note(
+    timing.outputActivity
+      ? `Activity is sampled on ${format(timing.outputActivity.count)} named output bits. Other rows use primitive-level changes.`
+      : "Rows use whole-primitive changes. This capture has no per-output-bit activity masks.",
+  );
+  if (groups?.length) {
+    note(
+      "Changed primitives with no outgoing timed connection in this capture, including unconsumed outputs. One instance per type is listed.",
+    );
+    const list = document.createElement("ul");
+    for (const { kind, count, example } of groups) {
+      const item = document.createElement("li");
+      item.textContent = `${kind} × ${format(count)} · ${example}`;
+      list.append(item);
+    }
+    details.append(list);
+  } else if (!groups) {
+    note(
+      "The capture lacks the data to compare timed drivers with whole-replay changes.",
+    );
+  }
+}
+
 /** Orthographic projection is affine; cache the four basis projections for these chip coordinates. */
 function projection(camera, viewport) {
   const matrix = cameraMatrices(camera, viewport).matrix;
@@ -275,6 +362,20 @@ export async function createFlow(replay, catalogs, asset) {
           replay.cycles,
         );
       }
+      const cellNames = new TextDecoder().decode(names).split("\n");
+      const timedModel = b === "vivado" ? model : pinModel;
+      let groups;
+      if (timedModel?.pairs && replay.backends[b].entire) {
+        catalogs[b].entire ??= asset(replay.backends[b].entire);
+        groups = missingFlowDrivers(
+          timedModel,
+          catalogs[b].type,
+          replay.backends[b].kinds,
+          cellNames,
+          await catalogs[b].entire,
+        );
+      }
+      showFlowCoverage(article, b, timing, timedModel, groups);
       if (info.siteMuxes) model.siteMuxes = info.siteMuxes;
       const top =
         b === "vivado"
@@ -288,7 +389,7 @@ export async function createFlow(replay, catalogs, asset) {
         pinModel,
         baseTop: top,
         top,
-        names: new TextDecoder().decode(names).split("\n"),
+        names: cellNames,
         paths: [],
         selection: null,
         active: new Set(),
@@ -529,7 +630,7 @@ export async function createFlow(replay, catalogs, asset) {
     }
     native.article.querySelector(".map-head span").textContent = timed
       ? routed
-        ? "Routed · post-route SDF · ns"
+        ? "Routed SDF · single delay estimate · ns"
         : "Placement estimate · ns"
       : "Placed · logic depth";
     for (const [index, b] of backends.entries()) {
@@ -857,7 +958,10 @@ export async function createFlow(replay, catalogs, asset) {
       (pair ? "/" + pair[0] : "") +
       " → " +
       p.names[d] +
-      (pair ? "/" + pair[1] : "");
+      (pair ? "/" + pair[1] : "") +
+      (p.model.activity?.lanes[i] >= 0
+        ? " · sampled output bit changed"
+        : " · primitive-level activity");
     redraw();
   }
 

@@ -222,6 +222,17 @@ summary {
 .coverage {
   padding: 4px 0;
 }
+.flow-coverage {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.flow-coverage p,
+.flow-coverage ul {
+  margin: 5px 0;
+}
+.flow-coverage ul {
+  padding-left: 18px;
+}
 .caption {
   margin: 8px 0;
 }

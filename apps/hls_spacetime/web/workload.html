@@ -88,7 +88,7 @@
           <article id="vivado-flow">
             <div class="map-head">
               <h3>Vivado</h3>
-              <span>Routed · delay in ns</span>
+              <span>Routed · maximum SDF delay · ns</span>
             </div>
             <p class="stat" aria-live="polite"></p>
             <canvas
@@ -96,6 +96,9 @@
               aria-label="Vivado routed 3D signal flow"
             ></canvas>
             <p class="flow-selection"></p>
+            <details class="flow-coverage">
+              <summary>Capture coverage</summary>
+            </details>
           </article>
           <article id="openxc7-flow">
             <div class="map-head">
@@ -105,6 +108,9 @@
             <p class="stat" aria-live="polite"></p>
             <canvas tabindex="0" aria-label="openXC7 3D signal flow"></canvas>
             <p class="flow-selection"></p>
+            <details class="flow-coverage">
+              <summary>Capture coverage</summary>
+            </details>
           </article>
         </div>
         <p class="caption">

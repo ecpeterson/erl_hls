@@ -157,7 +157,7 @@ npm --prefix apps/hls_spacetime start -- --data "$PLACED_FLOW"
 
 #### Four-Phi routed parity campaign
 
-The routed two-worker pair already exercises the scheduler RAM, capture register, DSP operand and correction path. Revisit four-worker routing for a specific congestion, fanout or implementation question. Feature coverage uses the smallest design that exercises the missing mode.
+The routed two-worker pair already exercises the scheduler RAM, capture register, DSP operand and correction path. The steps below record the four-worker route attempts and how to resume them if a four-worker congestion, fanout or implementation question arises. Current omissions and extension triggers are listed under [remaining work](#remaining-work).
 
 1. **Obtain a legal native route.** The stock-map run ended its hour with 2,120 overused wires. Mapping the decoder and harness separately with the corrected SDP72 map retained 64,989 decoder primitives, 48 DSPs and 52 block RAMs. At 20 ns and seed 1 it ended its hour with 80 overused wires. A retry requesting `--no-tmdriv` on the original frozen placement reached one conflict, then stopped at two after 50 iterations without improvement. That placement also restores timing-driven routing. Both contested wires carry the same scheduler output bit. Try a different routing seed on that placement and compare the named conflicts before repeating a full placement. The four-worker native gallery still uses placement estimates. [Routing attempts and input identities](../../yap/hls_spacetime/g44-phi-routing.json)
 2. **Bind the replay to that implementation.** Match packed pins, placement and simulated primitives to the routed checkpoint. Repeat the 4,096-clock replay and the public capture-lane checks if synthesis changes. Establish correspondence of the C32–C37 RAM transaction before attaching any route or timing to the comparison.
@@ -244,15 +244,33 @@ To reproduce the named-output replay, restore the two-worker observation archive
 
 ## Remaining work
 
-Four campaign items remain. Two concern primitive timing, one concerns native checkpoint import, and output activity expands when a workload exercises a new port.
+The paired Phi replay answers which primitives changed at each settled clock and where modeled signal paths run within that clock. On openXC7 the vertical axis uses one structural delay estimate on XC7Z030-1. The timing question that would require multiple corners is how the same implementation behaves across different process, voltage and temperature conditions.
 
-| Feature to qualify | Smallest existing witness and completion check |
+### Limits visible on the current decoder
+
+Open **Capture coverage** under either 3D panel. Counts cover the whole capture before the selected clock and activity filters. The panel lists connections omitted from timed flow and changing primitives with no outgoing timed connection, with an instance name for each type. An unconsumed output can also appear there. A primitive with one timed output can still have other unsupported pins. Picking a line in the full-flow view identifies the activity evidence for that row.
+
+| Current limitation | Where it matters | Next check if this path matters |
+| --- | --- | --- |
+| Split block RAM clock pins | Four changing native RAMB36E1 mailbox cells in the two-worker replay and eight in the four-worker replay have no outgoing timed rows. Their SDF already has 2,080 ps launches from `CLKARDCLKL`. Both clock halves connect to the workload clock. | Bind the SDF clock endpoint to the packed clock net in the flow reader. Check the first RAM-to-sink row on the frozen capture and a disconnected-clock control. |
+| Fixed-tap shift registers | The four-worker openXC7 mapping has two SRL16E and one SRLC32E. All three changed during replay. The activity map includes them and timed flow cuts their storage arcs. The two-worker native mapping has none. | For a path through a fixed tap, qualify its clock-to-output launch and any D/CE checks needed for that question. The address is constant throughout this workload. |
+| Implementation detail and activity | The two-worker native capture has directed geometry for all 100,758 displayed connections. Another 8,725 lack a modeled launch and 4,448 lack a replay endpoint. The four-worker native view uses placement estimates. Both four-worker panels use primitive-level activity; the two-worker pair also observes selected output bits. | Use the two-worker route for the shared RAM → capture → DSP path. Route four workers or add another bit monitor when a specific branch, fanout or port requires it. |
+| Other saved scopes | The earlier repetition N2 interval has 407 unqualified native destination bits and 2,409 disconnected constant branches. Some source expressions also lack producer correspondence. | Inspect the named binding or missing span when a selected write depends on it. Distributed constant ties remain outside this round. |
+
+### Work triggered by a future question
+
+| Extension | Trigger and available starting point |
 | --- | --- |
-| Variable-tap storage | Supply a mode-specific address-to-Q model, clock launch and data/enable checks for the two dynamic-tap fixtures, then admit the qualified arcs into timed flow. |
-| Block RAM write modes | The RAMB36E1 SDP72 READ_FIRST probe covers both output-register settings. Its WRITE_FIRST variant leaves 212 connected ports unqualified. When an application uses that mode, check same-address reads and writes and qualify its mode-specific timing. |
-| Activity on other output ports | Extend the named-pin monitor when another multi-output primitive or port is exercised. |
-| Routed checkpoint import | The original and patched nextpnr binaries both fail in the Series-7 PIP-name import when reopening the routed JSON. Reproduce timing from the frozen placement and seed. Qualify the inverse PIP and wire-name mappings for direct checkpoint reopen. |
+| Independent timing corners or additional clock relationships | A comparison needs early/late delays or corner-dependent slack. Obtain independent per-corner characterization and carry its identity through export, import and display. A generated or gated clock separately needs its clock relationship and constraints. |
+| Variable-tap shift registers | An application changes a tap address. The two [dynamic fixtures](#dynamic-shift-register-taps) already exercise all addresses and disabled shifts. Qualify address-to-Q with the shift held, alongside the storage boundary. |
+| WRITE_FIRST RAM or another hard-block mode | A mapped instance uses the mode on the selected path. All 26 native block RAMs on two workers and all 52 on four use READ_FIRST. The WRITE_FIRST negative probe has 212 unqualified connected ports; exercise same-address collisions before admitting its timing. |
+| Additional per-output activity or logical bindings | A primitive-level change leaves a question about which output changed, or a new workload needs source attribution. Capture the named bits on that implementation and replay. |
 
-1. **Distributed constant ties.** The 2,409 missing global-to-local constant branches are outside this visualization round. Their cut wires remain inspectable.
-2. **Multicorner timing and other hard modes.** The XC7 estimate includes predicted wiring and compiled slice FF clock parameters. A new corner, generated/gated clock relationship, DSP register, SRL tap or RAM configuration needs its own pin, clock and mode evidence. Use a workload that exercises the class, then compare native and vendor reports on matched parts and constraints. The four-Phi replay supplies RAM addresses, enables and read latency for one memory. Same-address read/write collisions were exercised in the smaller inferred-memory witness.
-3. **Storage mapping and producer scope.** The 407 unqualified XC7 destination bits and unsupported scalar expressions remain explicit. Additional workloads need their own logical recording and implementation bindings. A changed-schedule timing claim requires a new implementation.
+**Tooling follow-ups.** Directly reopening a routed JSON would shorten replay. The existing frozen placement and seed reproduce the two-worker route and timing byte for byte. Revisit the Series-7 PIP/wire-name importer when direct reopen becomes necessary. G4.5 tracks the reusable nextpnr changes for upstream review.
+
+### Adding coverage for a reported gap
+
+1. Start with the affected backend, checkpoint, cell, port and clock. Compare its packed connections and parameters with the corresponding SDF `INTERCONNECT`, `IOPATH` or timing check. If the record exists, follow it into the reader with the saved capture. The split RAM clock above is one such case. [Native flow reader](../../apps/hls_spacetime/test/native/four_phi/workload/placed_flow.py)
+2. If the native record is missing, use the smallest design that exercises the exact mode. The registered multiplier is a worked example. Check the active case against the reference for that part and speed grade, and keep a nearby unsupported configuration unqualified. Add native timing in the observer build and record its identity. [Multiplier model](../../platforms/xc7/timing_coverage/registered_dsp.inc) · [Build and overlays](../../platforms/xc7/timing_coverage/build_spacetime.sh) · [Verified replay](../../yap/hls_spacetime/g44-registered-dsp.json)
+3. If timing is present and activity is too coarse, extend the named output binding and sample the mapped netlist. The existing monitor checks that the old and new replays agree on every cell mask. [Output bindings and replay](../../apps/hls_spacetime/test/native/four_phi/workload/pin_activity.py)
+4. Check the affected row in the viewer, its coverage counts, and the unsupported case. Use `python3 apps/hls_spacetime/test/native/four_phi/workload/test_workload.py` for the flow reader and `npm --prefix apps/hls_spacetime test` for the viewer. Link the witness from this ledger with its implementation identity, scope and remaining omissions.

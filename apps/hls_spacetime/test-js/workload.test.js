@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { decodeFlow, decodeOutputActivity } from "../web/workload-flow.js";
+import {
+  decodeFlow,
+  decodeOutputActivity,
+  missingFlowDrivers,
+} from "../web/workload-flow.js";
 import { probeState, windowStart, unionMasks } from "../web/workload-model.js";
 
 test("output activity validates row bindings and the complete cycle inventory", () => {
@@ -12,6 +16,28 @@ test("output activity validates row bindings and the complete cycle inventory", 
   );
   assert.throws(() => decodeOutputActivity(rows, changes, 1, 2, 2), /lane/);
   assert.throws(() => decodeOutputActivity(rows, changes, 2, 2, 3), /activity/);
+});
+
+test("coverage compares changed primitives with outgoing net rows across the replay", () => {
+  const data = new DataView(new ArrayBuffer(48));
+  // Cell 1 drives two nets. A local arc at cell 2 supplies no outgoing net.
+  [1, 1, 2].forEach((driver, i) => data.setUint32(i * 16, driver, true));
+  const types = [0, 1, 0, 1, 0];
+  const names = ["ram0", "ff0", "ram1", "ff1", "ram2"];
+  const compare = (mask) =>
+    missingFlowDrivers(
+      { nets: 2, data },
+      types,
+      ["RAM", "FF"],
+      names,
+      Uint8Array.from(mask),
+    );
+  // Cell 3 only had unknown comparisons. Cell 4 stayed steady.
+  assert.deepEqual(compare([0b00111, 0b01000]), [
+    { kind: "RAM", count: 2, example: "ram0" },
+  ]);
+  assert.deepEqual(compare([0, 0xff]), []);
+  assert.throws(() => compare([1]), /mask/);
 });
 
 test("a known inactive valid is idle even when ready is unknown", () => {
