@@ -51,6 +51,13 @@ OBSERVATIONS = (
 
 def match(run: Path, vendor: Path) -> dict:
     """Require the two-pin, 20 ns routed Vivado result to identify the native run and all four RTL files."""
+    for name in REPORTS:
+        report = vendor / name
+        limit_mib = 256 if name == "routed.sdf" else 64
+        require(
+            report.is_file() and report.stat().st_size <= limit_mib << 20,
+            "Vivado report size " + name,
+        )
     cap = json.loads((run / "capture.json").read_text())
     manifest = json.loads((vendor / "input-manifest.json").read_text())
     require(

@@ -1,4 +1,6 @@
 {
+  "scope": "Vivado-only inputs for the remaining G4 campaign plus a separate four-worker correction replay. Part xc7z030sbg485-1, clock 20 ns for new implementations. No board programming.",
+  "archive": "runs/spacetime-g4-parity-2026-11-24/vivado-followups",
   "variableTaps": {
     "srl16e": {
       "clocks": 512,
@@ -7,7 +9,10 @@
       "holdClocks": 266,
       "outputTransitions": 204,
       "routedNets": 14,
-      "routingErrors": 0
+      "routingErrors": 0,
+      "fixtureSha256": "c834e3498a08b53e268d2ac562d0bd43bc81273f2260f85a7b2e7933936c920a",
+      "routedDcpSha256": "bc30ae11916333b005efd331d678326a6712a826e123474d01d3705a968d9d3f",
+      "routedSdfSha256": "9958d6dbd8154d572b7cde6a66c75b92864bcf4102ae0a66253b05e731777180"
     },
     "srlc32e": {
       "clocks": 512,
@@ -16,7 +21,10 @@
       "holdClocks": 266,
       "outputTransitions": 217,
       "routedNets": 14,
-      "routingErrors": 0
+      "routingErrors": 0,
+      "fixtureSha256": "9a4592fd86073159a9bd03fac7fd4f1bf421ff6b6e6321ac1d2280baf7341e10",
+      "routedDcpSha256": "355c68b83b13f7afe87788bdb4f639f2734424003fdbb5b9e33a281c25bcae6c",
+      "routedSdfSha256": "05a483f68bcd1a10951c2d0e4f8c48ab0a69933823850a03fa35ce63eea4feaf"
     }
   },
   "endpointExports": {
@@ -58,5 +66,102 @@
         "ROUTED": 925
       }
     }
-  }
+  },
+  "selectedSiteSwitch": {
+    "site": "SLICE_X6Y21",
+    "delayPs": 55,
+    "driver": "C6LUT.O6",
+    "sitePIP": "CFFMUX.O6->>OUT",
+    "sink": "CFF.D",
+    "source": "Locally traced the selected in-site mux in the two-worker DCP with the native Vivado EDIF. The paired gallery still labels this span unresolved."
+  },
+  "boundedRetry": {
+    "firstSynthesisThreads": 4,
+    "stop": "rss_6GiB",
+    "elapsedSeconds": 31.23368241000003,
+    "peakProcessGroupBytes": 6614843392,
+    "successfulSynthesisThreads": 1,
+    "sameRtl": true
+  },
+  "fourWorkerCorrection": {
+    "part": "xc7z030sbg485-1",
+    "periodNs": 20,
+    "inputManifest": "65654432f47ae67325e72ce770baa85a3d8af13adeb952913a61c3347da9119a",
+    "routedDcp": "5aaad2c97045f492411afbc6fd126da30d50caab9c0d427e7f9e952785479562",
+    "routedVerilog": "0447403427a033402f6d2225f9518ad4ed56bbca04e58e780dc6a9e0957cd72d",
+    "routedSdf": "259f78a6a4fb67202276b85e2d8b79cb7ae650e7b9a1affd61020cf3aba74916",
+    "routing": {
+      "routable": 45119,
+      "fullyRouted": 45119,
+      "errors": 0
+    },
+    "timing": {
+      "wns_ns": 6.841,
+      "tns_ns": 0.0,
+      "setup_failing": 0,
+      "setup_endpoints": 82652,
+      "whs_ns": 0.013,
+      "ths_ns": 0.0,
+      "hold_failing": 0,
+      "hold_endpoints": 82652,
+      "wpws_ns": 9.22,
+      "tpws_ns": 0.0,
+      "pulse_failing": 0,
+      "pulse_endpoints": 27104
+    },
+    "retainedPacketFlops": 256,
+    "retainedReadyFlops": 2,
+    "wallSeconds": 387.6325532000001,
+    "peakGroupBytes": 4461912064,
+    "profile": {
+      "width": 2,
+      "planes": [
+        "x",
+        "z"
+      ],
+      "height": 1,
+      "phi_actor_count": 4,
+      "scheduler_count": 4,
+      "shards_per_plane": 1,
+      "source_actor_count": 4,
+      "source_scheduler_count": 2
+    },
+    "RTL": "Current-generated decoder with the same two-pin harness behavior. A separately retained FDRE implements each original packet capture bit; two further FDREs sample readiness. The instrumented and original RTL emitted identical accepted frames on all 4096 clocks.",
+    "comparison": "Full payload and acceptance cycle on both mapped netlists. Native checkpoint is post-synthesis. The older four-worker placement gallery has different RTL and stimulus.",
+    "clocks": 4096,
+    "statusFrames": {
+      "X": 36,
+      "Z": 36
+    },
+    "correctionFrames": {
+      "X": 6,
+      "Z": 11
+    },
+    "firstCorrections": {
+      "X": "CORRECTION 237 0 0300000b000000080000000000000000",
+      "Z": "CORRECTION 239 1 0300000b000000010000000100000000"
+    },
+    "frameTraceSha256": "274b3b96e157cdb318d5fd79b87d8ca12b64055f111c3217ef8c492479698ee7",
+    "nativeMappedSha256": "6a7822fadbe0651b8a61589ecbcc9a6f0c9f70b7f254b4eb21d15de5ae0805c9",
+    "baselineHarnessSha256": "939d82bcb62599e9bd64e8e68d0e8b0911799d75c0360cbff30ee63e4d2c6733",
+    "oldFourWorkerRTL": {
+      "clocks": 32768,
+      "statusPerPlane": 704,
+      "corrections": 0
+    }
+  },
+  "registeredDSP": {
+    "sourceArchive": "local/erl-xls-experiments-2026-10-01/files/07-openxc7/build/vivado-reference-20260921/erl-hls-vivado-evidence-20260921.tar.gz",
+    "resultRoot": "erl-hls-vivado-20260921/bundle/results",
+    "fourWorkerPREG1": 18,
+    "micro": "micro includes one MREG=1, PREG=1 DSP. DCP, SDF, post-route Verilog and mode reports are in the local archive.",
+    "remaining": "Follow an accepted operation through the registered DSP and qualify native timing."
+  },
+  "remainingOffline": [
+    "Four-worker native routing and replay binding",
+    "Native variable-tap SRL and registered DSP timing qualification",
+    "Geometry resolution and per-output primitive activity",
+    "Review and upstream reusable nextpnr exports"
+  ],
+  "inventorySha256": "cba3c8992c8f12feaa42080a9e3bb233cb65ddeba3c02dd6aa8b592e38020a36"
 }
