@@ -1,6 +1,7 @@
 name: Source quality
 on:
   pull_request:
+    types: [opened, reopened, synchronize, ready_for_review, converted_to_draft]
   push:
     branches: [main]
   workflow_dispatch:
@@ -16,6 +17,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   contracts:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
